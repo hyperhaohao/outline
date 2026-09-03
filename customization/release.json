@@ -1,0 +1,12 @@
+{
+  "version": "1.10.0-ruima.1",
+  "platform": "linux/amd64",
+  "sourceRevision": "d0b85ba78444116dff87a62641c2d8f281ce659c",
+  "releaseTag": "ruima-1.10.0-ruima.1",
+  "archive": "outline-1.10.0-ruima.1.tar",
+  "archiveSha256": "12cb823ac3179cde63785851cd5da4070df737cd32d2f3a1a7fbc58bbea10afd",
+  "image": "ghcr.io/hyperhaohao/outline",
+  "digest": "sha256:8754e688020c622de7659acda92b1ac0de873e894b1ced02f0d6609f76747048",
+  "publicSourceRevision": "529a1b9ab2ce977719f571445a4d14981914ca55",
+  "upstreamRevision": "65be53c3eb093a535ce260eb2f2da897bb07a29e"
+}

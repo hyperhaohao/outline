@@ -1,0 +1,73 @@
+name: Publish verified Ruima image
+
+on:
+  push:
+    branches: [codex/non-admin-outline-links]
+    paths:
+      - ".github/workflows/ruima-publish.yml"
+      - "customization/release.json"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: ruima-image-publish
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: github.repository == 'hyperhaohao/outline'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      REGISTRY_AUTH_FILE: ${{ runner.temp }}/ruima-registry-auth.json
+    steps:
+      - uses: actions/checkout@v5
+
+      # 发布已验收的完整归档，保持与部署镜像相同的内容摘要。
+      - name: Read release manifest
+        run: |
+          version=$(jq -r .version customization/release.json)
+          archive=$(jq -r .archive customization/release.json)
+          release=$(jq -r .releaseTag customization/release.json)
+          image=$(jq -r .image customization/release.json)
+          digest=$(jq -r .digest customization/release.json)
+          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+-ruima\.[0-9]+$ ]]
+          [[ "$archive" == "outline-${version}.tar" ]]
+          [[ "$release" == "ruima-${version}" ]]
+          [[ "$image" == "ghcr.io/hyperhaohao/outline" ]]
+          [[ "$digest" =~ ^sha256:[a-f0-9]{64}$ ]]
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+          echo "ARCHIVE=$archive" >> "$GITHUB_ENV"
+          echo "RELEASE=$release" >> "$GITHUB_ENV"
+          echo "IMAGE=$image" >> "$GITHUB_ENV"
+          echo "DIGEST=$digest" >> "$GITHUB_ENV"
+
+      - name: Download and verify accepted image
+        run: |
+          gh release download "$RELEASE" --repo "$GITHUB_REPOSITORY" --pattern "$ARCHIVE" --dir "$RUNNER_TEMP"
+          checksum=$(jq -r .archiveSha256 customization/release.json)
+          printf '%s  %s\n' "$checksum" "$RUNNER_TEMP/$ARCHIVE" | sha256sum --check
+          tar -xOf "$RUNNER_TEMP/$ARCHIVE" index.json | jq -e --arg digest "$DIGEST" '.manifests | length == 1 and .[0].digest == $digest'
+
+      - name: Install registry copy tool
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y skopeo
+
+      - name: Publish image without changing its digest
+        env:
+          REGISTRY_USER: ${{ github.actor }}
+        run: |
+          printf '%s' "$GH_TOKEN" | skopeo login --authfile "$REGISTRY_AUTH_FILE" --username "$REGISTRY_USER" --password-stdin ghcr.io
+          skopeo copy --authfile "$REGISTRY_AUTH_FILE" --preserve-digests "oci-archive:$RUNNER_TEMP/$ARCHIVE" "docker:$IMAGE:$VERSION"
+          actual=$(skopeo inspect --authfile "$REGISTRY_AUTH_FILE" --raw "docker:$IMAGE:$VERSION" | sha256sum | cut -d ' ' -f 1)
+          test "sha256:$actual" = "$DIGEST"
+          printf 'Published and verified: `%s@%s`\n' "$IMAGE" "$DIGEST" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Remove temporary registry credentials
+        if: always()
+        run: rm -f -- "$REGISTRY_AUTH_FILE"
