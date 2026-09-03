@@ -28,6 +28,7 @@ import {
 import { NavigationSection, RecentSearchesSection } from "~/actions/sections";
 import Desktop from "~/utils/Desktop";
 import isCloudHosted from "~/utils/isCloudHosted";
+import { canShowOfficialLinks } from "~/utils/officialLinks";
 import {
   homePath,
   searchPath,
@@ -174,6 +175,7 @@ export const openDocumentation = createExternalLinkAction({
   iconInContextMenu: false,
   icon: <OpenIcon />,
   url: UrlHelper.guide,
+  visible: ({ stores }) => canShowOfficialLinks(stores.auth),
   target: "_blank",
 });
 
@@ -184,6 +186,7 @@ export const openAPIDocumentation = createExternalLinkAction({
   iconInContextMenu: false,
   icon: <OpenIcon />,
   url: UrlHelper.developers,
+  visible: ({ stores }) => canShowOfficialLinks(stores.auth),
   target: "_blank",
 });
 
@@ -202,6 +205,7 @@ export const openFeedbackUrl = createExternalLinkAction({
   iconInContextMenu: false,
   icon: <EmailIcon />,
   url: UrlHelper.contact,
+  visible: ({ stores }) => canShowOfficialLinks(stores.auth),
   target: "_blank",
 });
 
@@ -212,6 +216,7 @@ export const openBugReportUrl = createExternalLinkAction({
   iconInContextMenu: false,
   icon: <BugIcon />,
   url: UrlHelper.github,
+  visible: ({ stores }) => canShowOfficialLinks(stores.auth),
   target: "_blank",
 });
 
@@ -222,6 +227,7 @@ export const openChangelog = createExternalLinkAction({
   iconInContextMenu: false,
   icon: <OpenIcon />,
   url: UrlHelper.changelog,
+  visible: ({ stores }) => canShowOfficialLinks(stores.auth),
   target: "_blank",
 });
 
@@ -249,7 +255,11 @@ export const downloadApp = createExternalLinkAction({
   section: NavigationSection,
   iconInContextMenu: false,
   icon: <BrowserIcon />,
-  visible: () => !Desktop.isElectron() && isMac && isCloudHosted,
+  visible: ({ stores }) =>
+    canShowOfficialLinks(stores.auth) &&
+    !Desktop.isElectron() &&
+    isMac &&
+    isCloudHosted,
   url: "https://desktop.getoutline.com",
   target: "_blank",
 });

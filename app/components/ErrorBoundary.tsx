@@ -13,6 +13,7 @@ import PageTitle from "~/components/PageTitle";
 import Text from "~/components/Text";
 import env from "~/env";
 import Logger from "~/utils/Logger";
+import { useOfficialLinksVisible } from "~/hooks/useOfficialLinksVisible";
 import isCloudHosted from "~/utils/isCloudHosted";
 import { isStaleChunkError } from "~/utils/lazyWithRetry";
 import Storage from "@shared/utils/Storage";
@@ -32,6 +33,8 @@ interface OwnProps {
 
 type Props = OwnProps & {
   t: TFunction;
+  /** 当前身份是否可以使用官方问题反馈入口。 */
+  showOfficialLinks: boolean;
 };
 
 const ERROR_TRACKING_KEY = "error-boundary-tracking";
@@ -118,6 +121,9 @@ class ErrorBoundaryClass extends React.Component<Props> {
   };
 
   handleReportBug = () => {
+    if (!this.props.showOfficialLinks) {
+      return;
+    }
     window.open(isCloudHosted ? UrlHelper.contact : UrlHelper.github);
   };
 
@@ -199,9 +205,11 @@ class ErrorBoundaryClass extends React.Component<Props> {
               {t("Reload")}
             </Button>
             {this.showDetails ? (
-              <Button onClick={this.handleReportBug} neutral>
-                <Trans>Report a bug</Trans>
-              </Button>
+              this.props.showOfficialLinks && (
+                <Button onClick={this.handleReportBug} neutral>
+                  <Trans>Report a bug</Trans>
+                </Button>
+              )
             ) : (
               <Button onClick={this.handleShowDetails} neutral>
                 <Trans>Show detail</Trans>…
@@ -226,7 +234,14 @@ const Pre = styled.pre`
 
 function ErrorBoundary(props: OwnProps) {
   const { t } = useTranslation();
-  return <ErrorBoundaryClass t={t} {...props} />;
+  const showOfficialLinks = useOfficialLinksVisible({ allowAnonymous: true });
+  return (
+    <ErrorBoundaryClass
+      t={t}
+      showOfficialLinks={showOfficialLinks}
+      {...props}
+    />
+  );
 }
 
-export default ErrorBoundary;
+export default observer(ErrorBoundary);

@@ -1,5 +1,6 @@
 import i18n from "i18next";
 import backend from "i18next-http-backend";
+import { version } from "../../package.json";
 import { initReactI18next } from "react-i18next";
 import { languages } from "@shared/i18n";
 import { unicodeCLDRtoBCP47, unicodeBCP47toCLDR } from "@shared/utils/date";
@@ -33,7 +34,10 @@ export function initI18n(defaultLanguage = "en_US") {
         // this must match the path defined in routes. It's the path that the
         // frontend UI code will hit to load missing translations.
         loadPath: (locale: string[]) =>
-          cdnPath(`/locales/${unicodeBCP47toCLDR(locale[0])}.json`),
+          // 翻译资源默认缓存七天，按构建版本更新，避免发布后仍显示旧文案。
+          cdnPath(
+            `/locales/${unicodeBCP47toCLDR(locale[0])}.json?v=${version}`
+          ),
       },
       interpolation: {
         escapeValue: false,

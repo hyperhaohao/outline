@@ -748,6 +748,8 @@ function useUserHandlers() {
       if (event.id === auth.user?.id) {
         documents.all.forEach((document) => policies.remove(document.id));
         try {
+          // 角色通知只包含用户 ID，先刷新认证信息，避免菜单继续使用旧角色。
+          await auth.fetchAuth();
           await collections.fetchAll();
         } catch (err) {
           Logger.error(

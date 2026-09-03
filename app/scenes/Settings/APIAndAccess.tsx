@@ -1,3 +1,4 @@
+import { useOfficialLinksVisible } from "~/hooks/useOfficialLinksVisible";
 import { observer } from "mobx-react";
 import { PadlockIcon } from "outline-icons";
 import { useTranslation, Trans } from "react-i18next";
@@ -22,6 +23,7 @@ function APIAndAccess() {
   const team = useCurrentTeam();
   const user = useCurrentUser();
   const { t } = useTranslation();
+  const showOfficialLinks = useOfficialLinksVisible();
   const { apiKeys, oauthAuthentications } = useStores();
   const can = usePolicy(team);
   const appName = env.APP_NAME;
@@ -48,19 +50,26 @@ function APIAndAccess() {
       <h2>{t("Personal keys")}</h2>
       {can.createApiKey ? (
         <Text as="p" type="secondary">
-          <Trans
-            defaults="Create personal API keys to authenticate with the API and programatically control
+          {showOfficialLinks ? (
+            <Trans
+              defaults="Create personal API keys to authenticate with the API and programatically control
       your workspace's data. For more details see the <em>developer documentation</em>."
-            components={{
-              em: (
-                <a
-                  href="https://www.getoutline.com/developers"
-                  target="_blank"
-                  rel="noreferrer"
-                />
-              ),
-            }}
-          />
+              components={{
+                em: (
+                  <a
+                    href="https://www.getoutline.com/developers"
+                    target="_blank"
+                    rel="noreferrer"
+                  />
+                ),
+              }}
+            />
+          ) : (
+            <Trans>
+              Create personal API keys to authenticate with the API and
+              programatically control your workspace’s data.
+            </Trans>
+          )}
         </Text>
       ) : (
         <Trans>API keys have been disabled by an admin for your account</Trans>

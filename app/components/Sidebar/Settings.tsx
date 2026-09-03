@@ -9,6 +9,7 @@ import Flex from "~/components/Flex";
 import Scrollable from "~/components/Scrollable";
 import useSettingsConfig from "~/hooks/useSettingsConfig";
 import useStores from "~/hooks/useStores";
+import { useOfficialLinksVisible } from "~/hooks/useOfficialLinksVisible";
 import isCloudHosted from "~/utils/isCloudHosted";
 import { settingsPath } from "~/utils/routeHelpers";
 import Sidebar from "./Sidebar";
@@ -25,6 +26,7 @@ function SettingsSidebar() {
   const history = useHistory();
   const location = useLocation();
   const configs = useSettingsConfig();
+  const showOfficialLinks = useOfficialLinksVisible();
 
   const groupedConfig = groupBy(
     configs.filter((item) =>
@@ -70,7 +72,7 @@ function SettingsSidebar() {
               </Header>
             </Section>
           ))}
-          {!isCloudHosted && (
+          {!isCloudHosted && showOfficialLinks && (
             <Section>
               <Header title={t("Installation")} />
               <Version />

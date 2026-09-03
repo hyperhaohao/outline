@@ -1,3 +1,5 @@
+import { observer } from "mobx-react";
+import { useOfficialLinksVisible } from "~/hooks/useOfficialLinksVisible";
 import * as React from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
@@ -124,6 +126,7 @@ function splitIntoSlides(
  */
 function PresentationMode({ title, icon, iconColor, data, onClose }: Props) {
   const { t } = useTranslation();
+  const showOfficialLinks = useOfficialLinksVisible({ allowAnonymous: true });
   const theme = useTheme();
   const [currentSlide, setCurrentSlide] = React.useState(0);
   const containerRef = React.useRef<HTMLDivElement>(null);
@@ -360,13 +363,14 @@ function PresentationMode({ title, icon, iconColor, data, onClose }: Props) {
                 {t(
                   "Add content to your document, then use headings or dividers to separate it into slides."
                 )}{" "}
-                <a
-                  href="https://docs.getoutline.com/s/guide/doc/present-mode-yMGzaY7A9L"
-                  target="_blank"
-                >
-                  {t("Learn more")}
-                </a>
-                .
+                {showOfficialLinks && (
+                  <a
+                    href="https://docs.getoutline.com/s/guide/doc/present-mode-yMGzaY7A9L"
+                    target="_blank"
+                  >
+                    {t("Learn more")}
+                  </a>
+                )}
               </InstructionBody>
             </InstructionSlide>
           ) : slideData ? (
@@ -527,4 +531,4 @@ const InstructionBody = styled.p`
   color: ${s("textSecondary")};
 `;
 
-export default PresentationMode;
+export default observer(PresentationMode);

@@ -1,3 +1,4 @@
+import { useOfficialLinksVisible } from "~/hooks/useOfficialLinksVisible";
 import type { ColumnSort } from "@tanstack/react-table";
 import { observer } from "mobx-react";
 import { CodeIcon } from "outline-icons";
@@ -24,6 +25,7 @@ import { StickyFilters } from "./components/StickyFilters";
 function ApiKeys() {
   const team = useCurrentTeam();
   const { t } = useTranslation();
+  const showOfficialLinks = useOfficialLinksVisible();
   const { apiKeys } = useStores();
   const can = usePolicy(team);
   const params = useQuery();
@@ -119,19 +121,26 @@ function ApiKeys() {
     >
       <Heading>{t("API Keys")}</Heading>
       <Text as="p" type="secondary">
-        <Trans
-          defaults="API keys can be used to authenticate with the API and programatically control
+        {showOfficialLinks ? (
+          <Trans
+            defaults="API keys can be used to authenticate with the API and programatically control
           your workspace's data. For more details see the <em>developer documentation</em>."
-          components={{
-            em: (
-              <a
-                href="https://www.getoutline.com/developers"
-                target="_blank"
-                rel="noreferrer"
-              />
-            ),
-          }}
-        />
+            components={{
+              em: (
+                <a
+                  href="https://www.getoutline.com/developers"
+                  target="_blank"
+                  rel="noreferrer"
+                />
+              ),
+            }}
+          />
+        ) : (
+          <Trans>
+            API keys can be used to authenticate with the API and
+            programatically control your workspace’s data.
+          </Trans>
+        )}
       </Text>
       <StickyFilters>
         <InputSearch

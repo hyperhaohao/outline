@@ -1,18 +1,25 @@
 import { useState, useEffect } from "react";
+import { observer } from "mobx-react";
 import { useTranslation } from "react-i18next";
 import styled from "styled-components";
 import { toError } from "@shared/utils/error";
 import Badge from "~/components/Badge";
 import { client } from "~/utils/ApiClient";
 import Logger from "~/utils/Logger";
+import { useOfficialLinksVisible } from "~/hooks/useOfficialLinksVisible";
 import { version as currentVersion } from "../../../../package.json";
 import SidebarLink from "./SidebarLink";
 
-export default function Version() {
+function Version() {
   const [versionsBehind, setVersionsBehind] = useState(-1);
   const { t } = useTranslation();
+  const showOfficialLinks = useOfficialLinksVisible();
 
   useEffect(() => {
+    if (!showOfficialLinks) {
+      return;
+    }
+
     async function loadVersionInfo() {
       try {
         // Fetch version info from the server-side proxy
@@ -26,7 +33,11 @@ export default function Version() {
     }
 
     void loadVersionInfo();
-  }, []);
+  }, [showOfficialLinks]);
+
+  if (!showOfficialLinks) {
+    return null;
+  }
 
   return (
     <SidebarLink
@@ -57,3 +68,5 @@ export default function Version() {
 const LilBadge = styled(Badge)`
   margin-inline-start: 0;
 `;
+
+export default observer(Version);

@@ -1,0 +1,9 @@
+**
+!build/
+!build/app/
+!build/app/**
+!build/shared/
+!build/shared/i18n/
+!build/shared/i18n/**
+!package.json
+!LICENSE

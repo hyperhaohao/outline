@@ -1,3 +1,4 @@
+import { useOfficialLinksVisible } from "~/hooks/useOfficialLinksVisible";
 import { observer } from "mobx-react";
 import { CopyIcon, SparklesIcon } from "outline-icons";
 import * as React from "react";
@@ -19,6 +20,7 @@ import { useTheme } from "styled-components";
 
 function Features() {
   const { t } = useTranslation();
+  const showOfficialLinks = useOfficialLinksVisible();
   const team = useCurrentTeam();
   const theme = useTheme();
 
@@ -74,20 +76,27 @@ function Features() {
                   as="p"
                   style={{ marginTop: 8, marginBottom: 4 }}
                 >
-                  <Trans
-                    defaults="Use the following endpoint to connect to the MCP server from your app. Find out more about setup in <a>the docs</a>."
-                    components={{
-                      a: (
-                        <Text
-                          as="a"
-                          weight="bold"
-                          href="https://docs.getoutline.com/s/guide/doc/mcp-6j9jtENNKL"
-                          target="_blank"
-                          rel="noopener noreferrer"
-                        />
-                      ),
-                    }}
-                  />
+                  {showOfficialLinks ? (
+                    <Trans
+                      defaults="Use the following endpoint to connect to the MCP server from your app. Find out more about setup in <a>the docs</a>."
+                      components={{
+                        a: (
+                          <Text
+                            as="a"
+                            weight="bold"
+                            href="https://docs.getoutline.com/s/guide/doc/mcp-6j9jtENNKL"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                          />
+                        ),
+                      }}
+                    />
+                  ) : (
+                    <Trans>
+                      Use the following endpoint to connect to the MCP server
+                      from your app.
+                    </Trans>
+                  )}
                 </Text>
                 <Input readOnly value={mcpEndpoint}>
                   <Tooltip content={t("Copy URL")} placement="top">

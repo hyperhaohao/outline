@@ -1,3 +1,4 @@
+import { useOfficialLinksVisible } from "~/hooks/useOfficialLinksVisible";
 import { observer } from "mobx-react";
 import { SettingsIcon } from "outline-icons";
 import * as React from "react";
@@ -27,6 +28,7 @@ import SettingRow from "./components/SettingRow";
 
 function Preferences() {
   const { t } = useTranslation();
+  const showOfficialLinks = useOfficialLinksVisible();
   const { ui, dialogs } = useStores();
   const user = useCurrentUser();
   const team = useCurrentTeam();
@@ -187,18 +189,22 @@ function Preferences() {
         name="language"
         description={
           <>
-            <Trans>
-              Choose the interface language. Community translations are accepted
-              though our{" "}
-              <a
-                href="https://translate.getoutline.com"
-                target="_blank"
-                rel="noreferrer"
-              >
-                translation portal
-              </a>
-              .
-            </Trans>
+            {showOfficialLinks ? (
+              <Trans>
+                Choose the interface language. Community translations are
+                accepted though our{" "}
+                <a
+                  href="https://translate.getoutline.com"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  translation portal
+                </a>
+                .
+              </Trans>
+            ) : (
+              <Trans>Choose the interface language.</Trans>
+            )}
           </>
         }
       >

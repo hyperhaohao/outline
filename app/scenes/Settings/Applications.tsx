@@ -1,3 +1,4 @@
+import { useOfficialLinksVisible } from "~/hooks/useOfficialLinksVisible";
 import { observer } from "mobx-react";
 import { InternetIcon } from "outline-icons";
 import { useTranslation, Trans } from "react-i18next";
@@ -17,6 +18,7 @@ import OAuthClientListItem from "./components/OAuthClientListItem";
 function Applications() {
   const team = useCurrentTeam();
   const { t } = useTranslation();
+  const showOfficialLinks = useOfficialLinksVisible();
   const { oauthClients } = useStores();
   const can = usePolicy(team);
 
@@ -40,18 +42,25 @@ function Applications() {
     >
       <Heading>{t("Applications")}</Heading>
       <Text as="p" type="secondary">
-        <Trans
-          defaults="Applications allow you to build internal or public integrations with Outline and provide secure access via OAuth. For more details see the <em>developer documentation</em>."
-          components={{
-            em: (
-              <a
-                href="https://www.getoutline.com/developers"
-                target="_blank"
-                rel="noreferrer"
-              />
-            ),
-          }}
-        />
+        {showOfficialLinks ? (
+          <Trans
+            defaults="Applications allow you to build internal or public integrations with Outline and provide secure access via OAuth. For more details see the <em>developer documentation</em>."
+            components={{
+              em: (
+                <a
+                  href="https://www.getoutline.com/developers"
+                  target="_blank"
+                  rel="noreferrer"
+                />
+              ),
+            }}
+          />
+        ) : (
+          <Trans>
+            Applications allow you to build internal or public integrations with
+            Outline and provide secure access via OAuth.
+          </Trans>
+        )}
       </Text>
       <PaginatedList<OAuthClient>
         fetch={oauthClients.fetchPage}
