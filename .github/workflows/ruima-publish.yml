@@ -63,8 +63,8 @@ jobs:
           REGISTRY_USER: ${{ github.actor }}
         run: |
           printf '%s' "$GH_TOKEN" | skopeo login --authfile "$REGISTRY_AUTH_FILE" --username "$REGISTRY_USER" --password-stdin ghcr.io
-          skopeo copy --authfile "$REGISTRY_AUTH_FILE" --preserve-digests "oci-archive:$RUNNER_TEMP/$ARCHIVE" "docker:$IMAGE:$VERSION"
-          actual=$(skopeo inspect --authfile "$REGISTRY_AUTH_FILE" --raw "docker:$IMAGE:$VERSION" | sha256sum | cut -d ' ' -f 1)
+          skopeo copy --authfile "$REGISTRY_AUTH_FILE" --preserve-digests "oci-archive:$RUNNER_TEMP/$ARCHIVE" "docker://$IMAGE:$VERSION"
+          actual=$(skopeo inspect --authfile "$REGISTRY_AUTH_FILE" --raw "docker://$IMAGE:$VERSION" | sha256sum | cut -d ' ' -f 1)
           test "sha256:$actual" = "$DIGEST"
           printf 'Published and verified: `%s@%s`\n' "$IMAGE" "$DIGEST" >> "$GITHUB_STEP_SUMMARY"
 
