@@ -23,13 +23,13 @@ jobs:
     timeout-minutes: 20
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      REGISTRY_AUTH_FILE: ${{ runner.temp }}/ruima-registry-auth.json
     steps:
       - uses: actions/checkout@v5
 
       # 发布已验收的完整归档，保持与部署镜像相同的内容摘要。
       - name: Read release manifest
         run: |
+          echo "REGISTRY_AUTH_FILE=$RUNNER_TEMP/ruima-registry-auth.json" >> "$GITHUB_ENV"
           version=$(jq -r .version customization/release.json)
           archive=$(jq -r .archive customization/release.json)
           release=$(jq -r .releaseTag customization/release.json)
