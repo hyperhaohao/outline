@@ -1,4 +1,41 @@
-Outline 1.10.0-ruima.1 定制构建说明
+Outline 1.10.0-ruima.2 导出、打印、水印与风险审计候选构建
+
+本次基于已部署的 ruima.1 定制源码快照 640c989de979e29e9db35cc69226df9a02327b41，保留原入口隐藏补丁。
+沿用 viewersCanExport：关闭后 Viewer/Guest 禁止导出与打印，Member/工作区管理员保留既有权限。
+集合导出创建与执行沿用 export 权限；历史结果下载沿用 download 权限并重新校验资源与归档清单。
+全库导出始终只允许工作区管理员。正常阅读、附件和 MCP 写入不因导出开关改变。
+
+实现入口：
+server/security/exportAuthorization.ts 统一权限、当前凭据校验和实际归档清单。
+server/security/audit.ts 独立事务审计、固定元数据白名单与导出失败关闭。
+server/security/readRisk.ts Redis Lua 用户级滚动统计，跨 API/MCP 和不同凭据。
+app/components/DocumentSecurity.tsx 登录工作区文档身份水印、分屏与演示打印保护。
+app/scenes/Settings/RiskAudit.tsx 中文管理员审计查询。
+server/routes/api/securityAudit.ts 访问追踪、客户端打印上报及管理员过滤查询。
+
+默认风险阈值：5 分钟 50 篇不同文档或返回正文超过 10 MiB；仅标记，不自动封禁。
+集中配置：SECURITY_READ_WINDOW_MS、SECURITY_READ_DOCUMENTS、SECURITY_READ_BYTES。
+审计保留复用 CleanupOldEventsTask 的 365 天规则，由 Worker 独立注册 security-audit-retention 每小时任务，只清理 security.audit，不依赖启用全局 cron。审计不保存 Key/Token、签名链接、正文或完整载荷。
+浏览器水印每分钟刷新北京时间，服务端生成的访问编号与访问记录关联；浏览器打印上报不是可靠泄漏证明。
+已签发存储链接只受原有效期约束，不能立即撤回；允许阅读的内容仍可能被保存。
+
+构建与迁移：
+使用 Yarn 4.11.0、固定 yarn.lock，NODE_ENV=production yarn build。
+Dockerfile 叠加 build/app、build/server、build/shared、build/plugins 和包版本，沿用官方运行依赖。
+单独复制 server/migrations/20261012055118-security-audit-indexes.js，启动时增加事件部分索引与 JSONB GIN 索引。
+不改正文模型，回退旧镜像保留事件及索引，不执行清空事件或删除正文操作。
+QA 身份服务、测试代码、node_modules 构建环境、数据库和任何环境文件均不进入镜像叠加层。
+
+验收状态：
+定向验证覆盖 16 个测试文件；最终通过数量、浏览器验收及构建结果见候选发布审查记录。
+覆盖直接导出、历史结果、角色开关矩阵、撤销凭据、子文档撤权、附件、MCP 读写、跨凭据风险和业务回滚。
+组件测试覆盖未知权限、分屏清理、管理员水印、点击透传、断网后打印检查。
+Chrome/Edge 系统打印、Ctrl+P 与真实 PDF 应独立验收，不能把组件测试记作实际浏览器打印通过。
+候选镜像与补丁可独立审查；生产切换状态以外部实施记录为准。
+正式切换前补齐浏览器验收，核对固定摘要、只改两项镜像引用，重新保存停写窗口数据库备份并校验可恢复性。
+回退到 ruima.1 时，先移除 Bull 中 ID 为 security-audit-retention 的重复任务及其延迟任务，再启动旧 Worker，避免旧镜像无法识别新任务类型；保留数据库中的审计记录和索引。
+
+以下为 ruima.1 历史构建与发布记录，版本和无迁移描述仅适用于该历史版本：
 
 目标：
 工作区管理员保留 Outline 官方入口，其他已登录角色隐藏入口。

@@ -1,6 +1,8 @@
 import { observer } from "mobx-react";
 import { Suspense } from "react";
 import useStores from "~/hooks/useStores";
+import { client } from "~/utils/ApiClient";
+import DocumentSecurity from "./DocumentSecurity";
 import lazyWithRetry from "~/utils/lazyWithRetry";
 
 const PresentationMode = lazyWithRetry(
@@ -8,7 +10,7 @@ const PresentationMode = lazyWithRetry(
 );
 
 function Presentation() {
-  const { ui } = useStores();
+  const { ui, auth } = useStores();
 
   if (!ui.presentationData) {
     return null;
@@ -16,6 +18,9 @@ function Presentation() {
 
   return (
     <Suspense fallback={null}>
+      {auth.user && !client.shareId && ui.presentationData.documentId && (
+        <DocumentSecurity documentId={ui.presentationData.documentId} />
+      )}
       <PresentationMode
         title={ui.presentationData.title}
         icon={ui.presentationData.icon}

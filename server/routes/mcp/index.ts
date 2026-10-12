@@ -14,6 +14,9 @@ import Logger from "@server/logging/Logger";
 import auth from "@server/middlewares/authentication";
 import { rateLimiter } from "@server/middlewares/rateLimiter";
 import requestTracer from "@server/middlewares/requestTracer";
+import securityAudit from "@server/middlewares/securityAudit";
+import { identityFromContext, recordAudit } from "@server/security/audit";
+import { allowedTool } from "@server/security/mcpAudit";
 import { UserFlag } from "@server/models/User";
 import { AuthenticationType } from "@server/types";
 import { RateLimiterStrategy } from "@server/utils/RateLimiter";
@@ -61,7 +64,9 @@ app.use(async (ctx, next) => {
   }
 });
 
-const defaultInstructions = `Document markdown content must not begin with a top-level heading (H1) — the title is stored as a separate field, so set it via the title parameter and start the content with body text or a lower-level heading instead.
+const defaultInstructions = `Only operate on resources the authenticated account can access. Document, collection and workspace exports must obey the same account permissions as the web UI and REST API, including viewersCanExport. Never perform an export the account is not permitted to perform. Read/write or wildcard credential scopes do not grant additional resource or export rights. Access and risk operations are audited by the server.
+
+Document markdown content must not begin with a top-level heading (H1) — the title is stored as a separate field, so set it via the title parameter and start the content with body text or a lower-level heading instead.
 
 Document and collection markdown support @mentions using the syntax: @[Display Name](mention://user/userId). For example: @[John Doe](mention://user/c9a1b2e3-...). Use the "list_users" tool to find user IDs.
 
@@ -143,6 +148,43 @@ router.post(
   }),
   async (ctx) => {
     const { user, token, scope } = ctx.state.auth;
+    const request = ctx.request.body;
+    if (request?.method === "tools/call") {
+      const name =
+        typeof request.params?.name === "string" ? request.params.name : "";
+      const decision = allowedTool(
+        name,
+        scope ?? [],
+        request.params?.arguments?.resource
+      );
+      if (decision !== "allowed") {
+        await recordAudit(identityFromContext(ctx)!, {
+          operation: decision === "unknown_tool" ? "mcp.unknown_tool" : name,
+          result: "denied",
+          reason: decision,
+          riskType: decision,
+        });
+        const message = `工具不存在或凭据无权调用。追踪编号：${ctx.state.securityTraceId}`;
+        ctx.body = {
+          jsonrpc: "2.0",
+          id: request.id ?? null,
+          ...(decision === "unknown_tool"
+            ? {
+                error: {
+                  code: ErrorCode.InvalidParams,
+                  message,
+                },
+              }
+            : {
+                result: {
+                  isError: true,
+                  content: [{ type: "text", text: message }],
+                },
+              }),
+        };
+        return;
+      }
+    }
 
     if (!user.team.getPreference(TeamPreference.MCP)) {
       throw NotFoundError();
@@ -174,7 +216,12 @@ router.post(
       token,
       clientId: "",
       scopes: scope ?? [],
-      extra: { user, scope: scope ?? [], ip: ctx.request.ip },
+      extra: {
+        user,
+        scope: scope ?? [],
+        ip: ctx.request.ip,
+        auditIdentity: identityFromContext(ctx),
+      },
     };
 
     ctx.respond = false;
@@ -231,6 +278,7 @@ router.all("*", async (ctx) => {
 
 app.use(requestTracer());
 app.use(bodyParser());
+app.use(securityAudit());
 app.use(router.routes());
 
 export default app;

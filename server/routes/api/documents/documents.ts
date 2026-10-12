@@ -4,6 +4,16 @@ import fs from "fs-extra";
 import invariant from "invariant";
 import contentDisposition from "content-disposition";
 import Router from "koa-router";
+import {
+  authorizeExport,
+  authorizeExportDocuments,
+  exportDocumentIds,
+} from "@server/security/exportAuthorization";
+import {
+  identityFromContext,
+  recordAudit,
+  exportAuditOrigin,
+} from "@server/security/audit";
 import { escapeRegExp, has, remove, uniq } from "es-toolkit/compat";
 import mime from "mime-types";
 import type { Order, ScopeOptions, WhereOptions } from "sequelize";
@@ -951,7 +961,16 @@ router.post(
       ),
     });
 
-    authorize(user, "download", document);
+    authorizeExport(user, document);
+    await recordAudit(
+      identityFromContext(ctx)!,
+      {
+        operation: "documents.export",
+        result: "allowed",
+        targetIds: [document.id],
+      },
+      true
+    );
 
     const format = accept?.includes("text/html")
       ? FileOperationFormat.HTMLZip
@@ -976,6 +995,8 @@ router.post(
         );
       }
 
+      const exportedDocumentIds = await exportDocumentIds(document);
+      await authorizeExportDocuments(user, exportedDocumentIds);
       const fileOperation = await FileOperation.createWithCtx(ctx, {
         type: FileOperationType.Export,
         state: FileOperationState.Creating,
@@ -988,6 +1009,7 @@ router.post(
         url: null,
         size: 0,
         documentId: document.id,
+        options: { audit: exportAuditOrigin(ctx), exportedDocumentIds },
         userId: user.id,
         teamId: document.teamId,
       });

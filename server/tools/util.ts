@@ -1,6 +1,8 @@
 import type { AuthInfo } from "@modelcontextprotocol/sdk/server/auth/types.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
+import { auditToolResult } from "@server/security/mcpAudit";
+import type { AuditIdentity } from "@server/security/audit";
 import { errToString } from "@shared/utils/error";
 import env from "@server/env";
 import { Collection, Share, type Team, type User } from "@server/models";
@@ -129,7 +131,7 @@ export function withTracing<F extends (...args: any[]) => any>(
     serviceName: "mcp",
     spanName: "tool",
     resourceName: toolName,
-  })(function tracedHandler(this: any, ...args: any[]) {
+  })(async function tracedHandler(this: any, ...args: any[]) {
     const context = args[args.length - 1];
     const user = getActorFromContext(context);
     if (user) {
@@ -139,7 +141,22 @@ export function withTracing<F extends (...args: any[]) => any>(
         "request.teamId": user.teamId,
       });
     }
-    return handler.apply(this, args);
+    const identity = context.authInfo?.extra?.auditIdentity as
+      | AuditIdentity
+      | undefined;
+    let result;
+    try {
+      result = await handler.apply(this, args);
+    } catch (err) {
+      // SDK 捕获未处理的异常之前仍记录风险；不向客户端返回内部异常载荷。
+      if (!identity) {
+        throw err;
+      }
+      result = error(err);
+    }
+    return identity && result?.content
+      ? auditToolResult(identity, toolName, args[0], result)
+      : result;
   } as F);
 }
 /* oxlint-enable @typescript-eslint/no-explicit-any */

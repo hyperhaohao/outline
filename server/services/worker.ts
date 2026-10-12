@@ -1,5 +1,6 @@
 import { toError } from "@shared/utils/error";
 import env from "@server/env";
+import { scheduleSecurityAuditRetention } from "@server/security/retention";
 import Logger from "@server/logging/Logger";
 import { setResource, addTags } from "@server/logging/tracer";
 import { traceFunction } from "@server/logging/tracing";
@@ -205,4 +206,5 @@ export default async function init() {
   HealthMonitor.start(globalEventQueue());
   HealthMonitor.start(processorEventQueue());
   HealthMonitor.start(taskQueue());
+  await scheduleSecurityAuditRetention();
 }

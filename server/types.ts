@@ -71,6 +71,14 @@ export type Pagination = {
 };
 
 export type AppState = {
+  /** 服务端追踪与已验证身份，供事务外审计使用。 */
+  securityTraceId?: string;
+  auditUser?: User;
+  auditAuthType?: AuthenticationType;
+  credentialId?: string;
+  auditClientId?: string;
+  auditReason?: string;
+  exportAttempt?: boolean;
   auth: Authentication | Record<string, never>;
   transaction: Transaction;
   pagination: Pagination;

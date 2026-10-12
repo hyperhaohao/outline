@@ -122,6 +122,7 @@ class UiStore {
   /** Data for the currently active presentation, if any. */
   @observable
   presentationData: {
+    documentId?: string;
     title: string;
     icon?: string | null;
     color?: string | null;
@@ -137,6 +138,7 @@ class UiStore {
   setPresentingDocument = (document: Document | null): void => {
     this.presentationData = document
       ? {
+          documentId: document.id,
           title: document.titleWithDefault,
           icon: document.icon,
           color: document.color,

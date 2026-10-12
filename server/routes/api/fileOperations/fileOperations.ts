@@ -1,4 +1,7 @@
 import Router from "koa-router";
+import { FileOperationType } from "@shared/types";
+import { authorizeExportOperation } from "@server/security/exportAuthorization";
+import { identityFromContext, recordAudit } from "@server/security/audit";
 import type { WhereOptions } from "sequelize";
 import { UserRole } from "@shared/types";
 import { ValidationError } from "@server/errors";
@@ -82,12 +85,37 @@ const handleFileOperationsRedirect = async (
     userId: user.id,
     rejectOnEmpty: true,
   });
+  if (fileOperation.type === FileOperationType.Export) {
+    ctx.state.exportAttempt = true;
+    await recordAudit(
+      identityFromContext(ctx)!,
+      {
+        operation: "fileOperations.redirect",
+        result: "attempt",
+        targetIds: [id],
+      },
+      true
+    );
+  }
   authorize(user, "read", fileOperation);
 
   if (fileOperation.state !== "complete") {
     throw ValidationError(`${fileOperation.type} is not complete yet`);
   }
 
+  if (fileOperation.type === FileOperationType.Export) {
+    await authorizeExportOperation(user.id, fileOperation);
+    await recordAudit(
+      identityFromContext(ctx)!,
+      {
+        operation: "fileOperations.redirect",
+        result: "allowed",
+        targetIds: [id],
+        returnedBytes: fileOperation.size,
+      },
+      true
+    );
+  }
   const accessUrl = await FileStorage.getSignedUrl(fileOperation.key);
   ctx.redirect(accessUrl);
 };

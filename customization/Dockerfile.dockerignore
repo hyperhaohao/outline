@@ -2,8 +2,16 @@
 !build/
 !build/app/
 !build/app/**
+!build/server/
+!build/server/**
+!build/plugins/
+!build/plugins/**
 !build/shared/
+!build/shared/**
 !build/shared/i18n/
 !build/shared/i18n/**
 !package.json
 !LICENSE
+!server/
+!server/migrations/
+!server/migrations/20261012055118-security-audit-indexes.js

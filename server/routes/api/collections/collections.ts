@@ -1,4 +1,6 @@
 import Router from "koa-router";
+import { authorizeExport } from "@server/security/exportAuthorization";
+import { identityFromContext, recordAudit } from "@server/security/audit";
 import { randomUUID } from "node:crypto";
 import { truncate } from "es-toolkit/compat";
 import type { WhereOptions } from "sequelize";
@@ -550,7 +552,12 @@ router.post(
       userId: user.id,
       transaction,
     });
-    authorize(user, "export", collection);
+    authorizeExport(user, collection);
+    await recordAudit(
+      identityFromContext(ctx)!,
+      { operation: "collections.export", result: "allowed", targetIds: [id] },
+      true
+    );
 
     const fileOperation = await collectionExporter({
       collection,
@@ -581,7 +588,12 @@ router.post(
     const { user } = ctx.state.auth;
     const { transaction } = ctx.state;
     const team = await Team.findByPk(user.teamId, { transaction });
-    authorize(user, "createExport", team);
+    authorizeExport(user, team);
+    await recordAudit(
+      identityFromContext(ctx)!,
+      { operation: "collections.export_all", result: "allowed" },
+      true
+    );
 
     const fileOperation = await collectionExporter({
       user,

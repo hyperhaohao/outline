@@ -722,7 +722,10 @@ function useTeamHandlers() {
 
   return (socket: SocketWithAuthentication) => {
     socket.on("teams.update", (event: PartialExcept<Team, "id">) => {
-      if ("sharing" in event && event.sharing !== auth.team?.sharing) {
+      if (
+        ("sharing" in event && event.sharing !== auth.team?.sharing) ||
+        "preferences" in event
+      ) {
         documents.all.forEach((document) => {
           policies.remove(document.id);
         });

@@ -1,4 +1,5 @@
 import copy from "copy-to-clipboard";
+import { canPrintDocument } from "~/utils/printSecurity";
 import type { TFunction } from "i18next";
 import invariant from "invariant";
 import { capitalize, uniqBy } from "es-toolkit/compat";
@@ -1152,9 +1153,19 @@ export const printDocument = createAction({
   section: ActiveDocumentSection,
   icon: <PrintIcon />,
   iconInContextMenu: false,
-  visible: ({ activeDocumentId }) => !!(activeDocumentId && window.print),
-  perform: () => {
-    setTimeout(window.print, 0);
+  visible: ({ activeDocumentId, stores }) =>
+    !!activeDocumentId &&
+    typeof window.print === "function" &&
+    !!stores.policies.abilities(activeDocumentId).download,
+  perform: ({ activeDocumentId, stores }) => {
+    if (!canPrintDocument(stores, activeDocumentId)) {
+      return;
+    }
+    setTimeout(() => {
+      if (canPrintDocument(stores, activeDocumentId)) {
+        window.print();
+      }
+    }, 0);
   },
 });
 
@@ -1164,6 +1175,9 @@ export const exportDocument = createActionWithChildren({
   section: ActiveDocumentSection,
   icon: <ExportIcon />,
   keywords: "download print pdf markdown html",
+  visible: ({ activeDocumentId, stores }) =>
+    !!activeDocumentId &&
+    !!stores.policies.abilities(activeDocumentId).download,
   children: [
     downloadDocumentAsMarkdown,
     downloadDocumentAsHTML,

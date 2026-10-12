@@ -45,6 +45,7 @@ const Notifications = lazy(() => import("~/scenes/Settings/Notifications"));
 const Preferences = lazy(() => import("~/scenes/Settings/Preferences"));
 const Profile = lazy(() => import("~/scenes/Settings/Profile"));
 const Security = lazy(() => import("~/scenes/Settings/Security"));
+const RiskAudit = lazy(() => import("~/scenes/Settings/RiskAudit"));
 const Shares = lazy(() => import("~/scenes/Settings/Shares"));
 const Templates = lazy(() => import("~/scenes/Settings/Templates"));
 const CustomEmojis = lazy(() => import("~/scenes/Settings/CustomEmojis"));
@@ -79,6 +80,15 @@ const useSettingsConfig = () => {
 
   const config = useComputed(() => {
     const items: ConfigItem[] = [
+      {
+        name: "风险审计",
+        path: settingsPath("risk-audit"),
+        component: RiskAudit.Component,
+        preload: RiskAudit.preload,
+        enabled: user.isAdmin,
+        group: t("Workspace"),
+        icon: ShieldIcon,
+      },
       // Account
       {
         name: t("Profile"),

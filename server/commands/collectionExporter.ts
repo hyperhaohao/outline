@@ -6,6 +6,11 @@ import {
 import { traceFunction } from "@server/logging/tracing";
 import type { Collection, Team, User } from "@server/models";
 import { FileOperation } from "@server/models";
+import { exportAuditOrigin } from "@server/security/audit";
+import {
+  authorizeExportDocuments,
+  exportDocumentIds,
+} from "@server/security/exportAuthorization";
 import { type APIContext } from "@server/types";
 
 type Props = {
@@ -28,6 +33,10 @@ async function collectionExporter({
   ctx,
 }: Props) {
   const collectionId = collection?.id;
+  const exportedDocumentIds = collection
+    ? await exportDocumentIds(collection)
+    : [];
+  await authorizeExportDocuments(user, exportedDocumentIds);
   const key = FileOperation.getExportKey({
     name: collection?.name || team.name,
     teamId: user.teamId,
@@ -42,6 +51,8 @@ async function collectionExporter({
     size: 0,
     collectionId,
     options: {
+      audit: exportAuditOrigin(ctx),
+      exportedDocumentIds,
       includeAttachments,
       includePrivate,
     },

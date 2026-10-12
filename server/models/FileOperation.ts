@@ -30,6 +30,15 @@ import ParanoidModel from "./base/ParanoidModel";
 import { Buckets } from "./helpers/AttachmentHelper";
 
 export type FileOperationOptions = {
+  /** 导出内容标识清单：资源移动后仍按原文件包含的文档复查。 */
+  exportedDocumentIds?: string[];
+  /** 保存导出请求的安全元数据，执行时重查凭据 scope；不保存原始 Token。 */
+  audit?: {
+    traceId: string;
+    credentialId?: string;
+    clientId?: string;
+    channel: "web" | "api" | "mcp" | "worker";
+  };
   includeAttachments?: boolean;
   includePrivate?: boolean;
   permission?: CollectionPermission | null;

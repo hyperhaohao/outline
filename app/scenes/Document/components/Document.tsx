@@ -17,6 +17,7 @@ import type Revision from "~/models/Revision";
 import DocumentMove from "~/components/DocumentExplorer/DocumentMove";
 import DocumentPublish from "~/scenes/DocumentPublish";
 import ErrorBoundary from "~/components/ErrorBoundary";
+import DocumentSecurity from "~/components/DocumentSecurity";
 import LoadingIndicator from "~/components/LoadingIndicator";
 import PageTitle from "~/components/PageTitle";
 import PlaceholderDocument from "~/components/PlaceholderDocument";
@@ -326,6 +327,7 @@ function DocumentScene({
 
   return (
     <ErrorBoundary showTitle>
+      {!shareId && <DocumentSecurity documentId={document.id} />}
       <RegisterKeyDown trigger="m" handler={onMove} />
       <RegisterKeyDown trigger="z" metaKey handler={onUndoRedo} />
       <RegisterKeyDown trigger="e" handler={goToEdit} />

@@ -1,5 +1,11 @@
 import { Readable } from "node:stream";
 import fs from "fs-extra";
+import { randomUUID } from "node:crypto";
+import {
+  authorizeExportOperation,
+  verifyExportTree,
+} from "@server/security/exportAuthorization";
+import { recordAudit, type AuditIdentity } from "@server/security/audit";
 import { truncate } from "es-toolkit/compat";
 import type { ZipFile } from "yazl";
 import { toError } from "@shared/utils/error";
@@ -49,8 +55,41 @@ export default abstract class ExportTask extends BaseTask<Props> {
 
     let filePath: string | undefined;
     let readStream: fs.ReadStream | undefined;
+    const identity: AuditIdentity = {
+      user,
+      ...fileOperation.options?.audit,
+      channel: "worker",
+      traceId: fileOperation.options?.audit?.traceId ?? randomUUID(),
+    };
 
     try {
+      await recordAudit(
+        identity,
+        {
+          operation: "export.execute",
+          result: "attempt",
+          targetIds: [fileOperationId],
+        },
+        true
+      );
+      const authorizedUser = await authorizeExportOperation(
+        user.id,
+        fileOperation,
+        true
+      );
+      if (authorizedUser) {
+        user.team = authorizedUser.team;
+        user.role = authorizedUser.role;
+      }
+      await recordAudit(
+        identity,
+        {
+          operation: "export.execute",
+          result: "allowed",
+          targetIds: [fileOperationId],
+        },
+        true
+      );
       Logger.info("task", `ExportTask processing data for ${fileOperationId}`, {
         options: fileOperation.options,
       });
@@ -68,6 +107,7 @@ export default abstract class ExportTask extends BaseTask<Props> {
       });
 
       const stat = await fs.stat(filePath);
+      await authorizeExportOperation(user.id, fileOperation, true);
       readStream = fs.createReadStream(filePath);
       const url = await FileStorage.store({
         body: readStream,
@@ -82,6 +122,16 @@ export default abstract class ExportTask extends BaseTask<Props> {
         state: FileOperationState.Complete,
         url,
       });
+      await recordAudit(
+        identity,
+        {
+          operation: "export.execute",
+          result: "complete",
+          targetIds: [fileOperationId],
+          returnedBytes: stat.size,
+        },
+        true
+      );
 
       if (user.subscribedToEventType(NotificationEventType.ExportCompleted)) {
         await new ExportSuccessEmail({
@@ -94,6 +144,18 @@ export default abstract class ExportTask extends BaseTask<Props> {
         }).schedule();
       }
     } catch (error) {
+      const denied =
+        error &&
+        typeof error === "object" &&
+        "status" in error &&
+        Number(error.status) < 500;
+      await recordAudit(identity, {
+        operation: "export.execute",
+        result: denied ? "denied" : "failed",
+        targetIds: [fileOperationId],
+        reason: denied ? "resource_permission" : "operation_failed",
+        riskType: denied ? "permission_denied" : undefined,
+      });
       await this.updateFileOperation(fileOperation, {
         state: FileOperationState.Error,
         error: toError(error),
@@ -141,6 +203,8 @@ export default abstract class ExportTask extends BaseTask<Props> {
       if (!documentStructure) {
         throw new Error("Document not found in collection tree");
       }
+
+      await verifyExportTree(user, fileOperation, [documentStructure]);
 
       return this.exportDocument(
         document,
@@ -195,6 +259,11 @@ export default abstract class ExportTask extends BaseTask<Props> {
       }
     );
 
+    await verifyExportTree(
+      user,
+      fileOperation,
+      collections.flatMap((collection) => collection.documentStructure ?? [])
+    );
     return this.exportCollections(collections, fileOperation);
   }
 

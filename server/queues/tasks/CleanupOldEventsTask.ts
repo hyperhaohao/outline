@@ -8,6 +8,11 @@ import { CronTask, TaskInterval } from "./base/CronTask";
 import { Minute } from "@shared/utils/time";
 
 export default class CleanupOldEventsTask extends CronTask {
+  /** 子任务可以限定事件类型；原有全局 cron 清理行为保持一致。 */
+  protected get eventName(): string | undefined {
+    return undefined;
+  }
+
   public async perform({ partition }: Props) {
     // TODO: Hardcoded right now, configurable later
     const retentionDays = 365;
@@ -20,6 +25,7 @@ export default class CleanupOldEventsTask extends CronTask {
         {
           attributes: ["id"],
           where: {
+            ...(this.eventName ? { name: this.eventName } : {}),
             createdAt: {
               [Op.lt]: cutoffDate,
             },

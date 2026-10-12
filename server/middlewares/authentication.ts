@@ -9,6 +9,7 @@ import tracer, {
 } from "@server/logging/tracer";
 import { User, Team, ApiKey, OAuthAuthentication } from "@server/models";
 import type { AppContext } from "@server/types";
+import { beginExportAudit } from "@server/middlewares/securityAudit";
 import { AuthenticationType } from "@server/types";
 import { getJWTPayload, getUserForJWT } from "@server/utils/jwt";
 import {
@@ -53,6 +54,7 @@ export default function auth(options: AuthenticationOptions = {}) {
         service,
         scope,
       };
+      await beginExportAudit(ctx);
 
       if (tracer) {
         addTags(
@@ -179,12 +181,6 @@ async function validateAuthentication(
     if (authentication.accessTokenExpiresAt < new Date()) {
       throw AuthenticationError("Access token is expired");
     }
-    if (!authentication.canAccess(ctx.originalUrl)) {
-      throw AuthorizationError(
-        "Access token does not have access to this resource"
-      );
-    }
-
     user = await User.findByPk(authentication.userId, {
       include: [
         {
@@ -196,6 +192,16 @@ async function validateAuthentication(
     });
     if (!user) {
       throw AuthenticationError("Invalid access token");
+    }
+    ctx.state.auditUser = user;
+    ctx.state.credentialId = authentication.id;
+    ctx.state.auditAuthType = type;
+    ctx.state.auditClientId = authentication.oauthClientId;
+    if (!authentication.canAccess(ctx.originalUrl)) {
+      ctx.state.auditReason = "credential_scope";
+      throw AuthorizationError(
+        "Access token does not have access to this resource"
+      );
     }
 
     scope = authentication.scope;
@@ -222,10 +228,6 @@ async function validateAuthentication(
       throw AuthenticationError("API key is expired");
     }
 
-    if (!apiKey.canAccess(ctx.originalUrl)) {
-      throw AuthorizationError("API key does not have access to this resource");
-    }
-
     user = await User.findByPk(apiKey.userId, {
       include: [
         {
@@ -238,6 +240,13 @@ async function validateAuthentication(
 
     if (!user) {
       throw AuthenticationError("Invalid API key");
+    }
+    ctx.state.auditUser = user;
+    ctx.state.credentialId = apiKey.id;
+    ctx.state.auditAuthType = type;
+    if (!apiKey.canAccess(ctx.originalUrl)) {
+      ctx.state.auditReason = "credential_scope";
+      throw AuthorizationError("API key does not have access to this resource");
     }
 
     scope = apiKey.scope ?? ["*"];
@@ -260,6 +269,8 @@ async function validateAuthentication(
     const result = await getUserForJWT(token);
     user = result.user;
     service = result.service;
+    ctx.state.auditUser = user;
+    ctx.state.auditAuthType = type;
   }
 
   if (user.isSuspended) {
