@@ -48,6 +48,15 @@ export async function authorizeExportOperation(
   if (user.isSuspended || user.teamId !== operation.teamId) {
     throw AuthorizationError();
   }
+  // 旧归档没有实际文档清单，当前目录不能证明已移走的历史正文仍可访问。
+  // 非管理员可重新导出当前授权内容；待执行任务会在生成文件前建立清单。
+  if (
+    !checkOrigin &&
+    !user.isAdmin &&
+    !Array.isArray(operation.options?.exportedDocumentIds)
+  ) {
+    throw AuthorizationError();
+  }
   const origin = operation.options?.audit;
   if (checkOrigin && origin?.credentialId) {
     const credential =

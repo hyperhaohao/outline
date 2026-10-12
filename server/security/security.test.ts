@@ -62,6 +62,41 @@ async function fixture(role = UserRole.Member, enabled = false) {
 afterEach(() => vi.restoreAllMocks());
 
 describe("导出与风险审计", () => {
+  it("缺少归档文档清单的旧结果拒绝非管理员下载，管理员仍按资源规则检查", async () => {
+    const { user, admin, team, collection } = await fixture();
+    await UserMembership.create({
+      userId: user.id,
+      collectionId: collection.id,
+      permission: CollectionPermission.Admin,
+      createdById: admin.id,
+    });
+    const operation = await buildFileOperation({
+      type: FileOperationType.Export,
+      state: FileOperationState.Complete,
+      teamId: team.id,
+      userId: user.id,
+      collectionId: collection.id,
+    });
+    const response = await server.post("/api/fileOperations.redirect", user, {
+      body: { id: operation.id },
+      redirect: "manual",
+    });
+    expect(response.status).toBe(403);
+    expect(await authorizeExportOperation(admin.id, operation)).toBeDefined();
+    const denied = await Event.findAll({
+      where: {
+        name: "security.audit",
+        actorId: user.id,
+        data: { result: "denied" },
+      },
+    });
+    expect(denied).toHaveLength(1);
+    expect(denied[0].data?.reason).toBe("legacy_export_manifest");
+    // 新任务在实际生成前取得清单，之后仍可按现有成员权限下载。
+    await authorizeExportOperation(user.id, operation, true);
+    await operation.reload();
+    expect(await authorizeExportOperation(user.id, operation)).toBeDefined();
+  });
   for (const enabled of [false, true]) {
     for (const role of [
       UserRole.Admin,

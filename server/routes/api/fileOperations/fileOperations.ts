@@ -104,6 +104,12 @@ const handleFileOperationsRedirect = async (
   }
 
   if (fileOperation.type === FileOperationType.Export) {
+    if (
+      !user.isAdmin &&
+      !Array.isArray(fileOperation.options?.exportedDocumentIds)
+    ) {
+      ctx.state.auditReason = "legacy_export_manifest";
+    }
     await authorizeExportOperation(user.id, fileOperation);
     await recordAudit(
       identityFromContext(ctx)!,

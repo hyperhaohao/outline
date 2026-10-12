@@ -364,6 +364,7 @@ describe("#fileOperations.redirect", () => {
       teamId: team.id,
       userId: user.id,
       collectionId: collection.id,
+      options: { exportedDocumentIds: [] },
     });
     const res = await server.post("/api/fileOperations.redirect", user, {
       body: {
@@ -416,6 +417,7 @@ describe("#fileOperations.redirect", () => {
       teamId: team.id,
       userId: user.id,
       collectionId: collection.id,
+      options: { exportedDocumentIds: [] },
     });
     const res = await server.post("/api/fileOperations.redirect", user, {
       body: {
@@ -441,6 +443,7 @@ describe("#fileOperations.redirect", () => {
       teamId: team.id,
       userId: user.id,
       documentId: document.id,
+      options: { exportedDocumentIds: [document.id] },
     });
     const res = await server.post("/api/fileOperations.redirect", user, {
       body: {
