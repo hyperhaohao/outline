@@ -1,5 +1,5 @@
-import { render, unmountComponentAtNode } from "react-dom";
-import { act } from "react-dom/test-utils";
+import { createRoot, type Root } from "react-dom/client";
+import { act } from "react";
 import { vi } from "vitest";
 import WebsocketProvider from "./WebsocketProvider";
 
@@ -32,20 +32,23 @@ vi.mock("~/hooks/useStores", () => ({
 
 describe("实时角色通知刷新当前认证信息", () => {
   let container: HTMLDivElement;
+  let root: Root;
 
   beforeEach(() => {
     vi.clearAllMocks();
     handlers.clear();
     container = document.createElement("div");
     document.body.append(container);
+    root = createRoot(container);
+    Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
     act(() => {
-      render(<WebsocketProvider />, container);
+      root.render(<WebsocketProvider />);
     });
   });
 
   afterEach(() => {
     act(() => {
-      unmountComponentAtNode(container);
+      root.unmount();
     });
     container.remove();
   });

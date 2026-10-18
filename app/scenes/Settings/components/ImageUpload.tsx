@@ -2,7 +2,7 @@ import invariant from "invariant";
 import { observer } from "mobx-react";
 import * as React from "react";
 import { useState, useRef } from "react";
-import AvatarEditor from "react-avatar-editor";
+import AvatarEditor, { type AvatarEditorRef } from "react-avatar-editor";
 import { useDropzone } from "react-dropzone";
 import { useTranslation } from "react-i18next";
 import styled from "styled-components";
@@ -22,6 +22,7 @@ export type Props = {
   onError: (error: string) => void;
   submitText?: string;
   borderRadius?: number;
+  children?: React.ReactNode;
 };
 
 const ImageUpload: React.FC<Props> = ({
@@ -84,7 +85,7 @@ const ImageUpload: React.FC<Props> = ({
         if (!converted) {
           onError(
             t(
-              "Your browser cannot read HEIC images, please convert it to JPEG or PNG first"
+              "Your browser cannot read HEIC images, please convert the image to JPEG or PNG first"
             )
           );
           return;
@@ -140,7 +141,7 @@ const AvatarEditorDialog: React.FC<AvatarEditorDialogProps> = observer(
     const { t } = useTranslation();
     const [zoom, setZoom] = useState(1);
     const [isUploading, setIsUploading] = useState(false);
-    const avatarEditorRef = useRef<AvatarEditor>(null);
+    const avatarEditorRef = useRef<AvatarEditorRef>(null);
 
     const handleUpload = React.useCallback(() => {
       setIsUploading(true);

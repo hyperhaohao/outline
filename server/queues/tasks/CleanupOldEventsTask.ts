@@ -2,13 +2,14 @@ import { subDays } from "date-fns";
 import { Op } from "sequelize";
 import Logger from "@server/logging/Logger";
 import { Event } from "@server/models";
+import { sequelizeReadOnly } from "@server/storage/database";
 import { TaskPriority } from "./base/BaseTask";
 import type { Props } from "./base/CronTask";
 import { CronTask, TaskInterval } from "./base/CronTask";
 import { Minute } from "@shared/utils/time";
 
 export default class CleanupOldEventsTask extends CronTask {
-  /** 子任务可以限定事件类型；原有全局 cron 清理行为保持一致。 */
+  /** 子任务限定事件类型，避免独立审计清理影响业务事件。 */
   protected get eventName(): string | undefined {
     return undefined;
   }
@@ -21,29 +22,32 @@ export default class CleanupOldEventsTask extends CronTask {
     let totalEventsDeleted = 0;
 
     try {
-      await Event.findAllInBatches(
-        {
-          attributes: ["id"],
-          where: {
-            ...(this.eventName ? { name: this.eventName } : {}),
-            createdAt: {
-              [Op.lt]: cutoffDate,
-            },
-            ...this.getPartitionWhereClause("id", partition),
-          },
-          batchLimit: 1000,
-          totalLimit: maxEventsPerTask,
-          order: [["createdAt", "ASC"]],
-        },
-        async (events) => {
-          totalEventsDeleted += await Event.destroy({
+      await sequelizeReadOnly.transaction(async (transaction) =>
+        Event.findAllInBatches(
+          {
+            attributes: ["id"],
             where: {
-              id: {
-                [Op.in]: events.map((event) => event.id),
+              ...(this.eventName ? { name: this.eventName } : {}),
+              createdAt: {
+                [Op.lt]: cutoffDate,
               },
+              ...this.getPartitionWhereClause("id", partition),
             },
-          });
-        }
+            batchLimit: 1000,
+            totalLimit: maxEventsPerTask,
+            order: [["createdAt", "ASC"]],
+            transaction,
+          },
+          async (events) => {
+            totalEventsDeleted += await Event.destroy({
+              where: {
+                id: {
+                  [Op.in]: events.map((event) => event.id),
+                },
+              },
+            });
+          }
+        )
       );
     } finally {
       if (totalEventsDeleted > 0) {

@@ -18,6 +18,7 @@ import {
   yDocToProsemirrorJSON,
 } from "y-prosemirror";
 import * as Y from "yjs";
+import { StyleSheetProvider } from "@shared/components/StyleSheetProvider";
 import { toError, errToString } from "@shared/utils/error";
 import Diff from "@shared/editor/extensions/Diff";
 import { HeadingPrefixHelper } from "@shared/editor/extensions/HeadingPrefix";
@@ -407,6 +408,7 @@ export class ProsemirrorHelper extends SharedProsemirrorHelper {
     }
 
     function replaceDocumentReferencesInner(node: ProsemirrorData) {
+      // Node.toJSON shares attrs with the node, so replace them rather than mutate.
       if (
         node.type === "mention" &&
         node.attrs?.type === MentionType.Document &&
@@ -414,7 +416,7 @@ export class ProsemirrorHelper extends SharedProsemirrorHelper {
       ) {
         const replacement = documents.get(node.attrs.modelId);
         if (replacement) {
-          node.attrs.modelId = replacement.id;
+          node.attrs = { ...node.attrs, modelId: replacement.id };
         }
       }
 
@@ -428,7 +430,7 @@ export class ProsemirrorHelper extends SharedProsemirrorHelper {
             node.text = href;
           }
 
-          mark.attrs.href = href;
+          mark.attrs = { ...mark.attrs, href };
         }
       });
 
@@ -468,15 +470,16 @@ export class ProsemirrorHelper extends SharedProsemirrorHelper {
     }
 
     function replaceInternalUrlsInner(node: ProsemirrorData) {
+      // Node.toJSON shares attrs with the node, so replace them rather than mutate.
       if (typeof node.attrs?.href === "string") {
-        node.attrs.href = replaceUrl(node.attrs.href);
+        node.attrs = { ...node.attrs, href: replaceUrl(node.attrs.href) };
       } else if (node.marks) {
         node.marks.forEach((mark) => {
           if (
             typeof mark.attrs?.href === "string" &&
             isInternalUrl(mark.attrs?.href)
           ) {
-            mark.attrs.href = replaceUrl(mark.attrs.href);
+            mark.attrs = { ...mark.attrs, href: replaceUrl(mark.attrs.href) };
           }
         });
       }
@@ -561,14 +564,24 @@ export class ProsemirrorHelper extends SharedProsemirrorHelper {
     }
 
     function replaceAttachmentUrls(node: ProsemirrorData) {
+      // Node.toJSON shares attrs with the node, so replace them rather than mutate.
       if (node.attrs?.src) {
-        node.attrs.src = getMapping(node.attrs.src as string);
+        node.attrs = {
+          ...node.attrs,
+          src: getMapping(node.attrs.src as string),
+        };
       } else if (node.attrs?.href) {
-        node.attrs.href = getMapping(node.attrs.href as string);
+        node.attrs = {
+          ...node.attrs,
+          href: getMapping(node.attrs.href as string),
+        };
       } else if (node.marks) {
         node.marks.forEach((mark) => {
           if (mark.attrs?.href) {
-            mark.attrs.href = getMapping(mark.attrs.href as string);
+            mark.attrs = {
+              ...mark.attrs,
+              href: getMapping(mark.attrs.href as string),
+            };
           }
         });
       }
@@ -674,7 +687,7 @@ export class ProsemirrorHelper extends SharedProsemirrorHelper {
     // touch process globals, so it stays outside the export lock below.
     try {
       html = renderToString(
-        sheet.collectStyles(
+        <StyleSheetProvider sheet={sheet.instance}>
           <ThemeProvider theme={light}>
             <>
               {options?.includeStyles === false ? (
@@ -687,7 +700,7 @@ export class ProsemirrorHelper extends SharedProsemirrorHelper {
               )}
             </>
           </ThemeProvider>
-        )
+        </StyleSheetProvider>
       );
       styleTags = sheet.getStyleTags();
     } catch (error) {
@@ -887,6 +900,9 @@ export class ProsemirrorHelper extends SharedProsemirrorHelper {
         } catch (err) {
           Logger.error("Error destroying ProseMirror view", toError(err));
         }
+        // Unmounting schedules a final passive-effect flush; run it while the
+        // globals are still patched or React reads an undefined `window`.
+        await this.flushReactEffects();
         try {
           dom.window.close();
         } catch (_err) {

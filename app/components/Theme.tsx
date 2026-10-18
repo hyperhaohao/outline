@@ -3,6 +3,7 @@ import { observer } from "mobx-react";
 import * as React from "react";
 import { useTranslation } from "react-i18next";
 import { ThemeProvider } from "styled-components";
+import { StyleSheetProvider } from "@shared/components/StyleSheetProvider";
 import GlobalStyles from "@shared/styles/globals";
 import { TeamPreference, UserPreference } from "@shared/types";
 import { isRTLLanguage } from "@shared/utils/rtl";
@@ -13,7 +14,7 @@ type Props = {
   children?: React.ReactNode;
 };
 
-const Theme: React.FC = ({ children }: Props) => {
+const Theme: React.FC<Props> = ({ children }: Props) => {
   const { auth, ui } = useStores();
   const { i18n } = useTranslation();
   const theme = useBuildTheme(
@@ -53,17 +54,20 @@ const Theme: React.FC = ({ children }: Props) => {
 
   return (
     <DirectionProvider dir={direction}>
-      <ThemeProvider theme={theme}>
-        <>
-          <GlobalStyles
-            useCursorPointer={
-              // Default to showing the cursor pointer if no user is logged in (public share)
-              auth.user?.getPreference(UserPreference.UseCursorPointer) ?? true
-            }
-          />
-          {children}
-        </>
-      </ThemeProvider>
+      <StyleSheetProvider>
+        <ThemeProvider theme={theme}>
+          <>
+            <GlobalStyles
+              useCursorPointer={
+                // Default to showing the cursor pointer if no user is logged in (public share)
+                auth.user?.getPreference(UserPreference.UseCursorPointer) ??
+                true
+              }
+            />
+            {children}
+          </>
+        </ThemeProvider>
+      </StyleSheetProvider>
     </DirectionProvider>
   );
 };

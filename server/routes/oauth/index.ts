@@ -1,7 +1,7 @@
 import OAuth2Server from "@node-oauth/oauth2-server";
 import Koa from "koa";
 import bodyParser from "koa-body";
-import Router from "koa-router";
+import Router from "@koa/router";
 import env from "@server/env";
 import { ValidationError, NotFoundError } from "@server/errors";
 import { apiContext } from "@server/middlewares/apiContext";
@@ -18,6 +18,7 @@ import type { APIContext } from "@server/types";
 import { AuthenticationType } from "@server/types";
 import { RateLimiterStrategy } from "@server/utils/RateLimiter";
 import { TeamPreference } from "@shared/types";
+import { OAuthHelper } from "@server/utils/oauth/OAuthHelper";
 import { OAuthInterface } from "@server/utils/oauth/OAuthInterface";
 import { getTeamFromContext } from "@server/utils/passport";
 import oauthErrorHandler from "./middlewares/oauthErrorHandler";
@@ -100,16 +101,24 @@ router.post(
     const clientId = ctx.input.body.client_id;
     const clientSecret = ctx.input.body.client_secret;
 
-    // Because we disabled client authentication for refresh_token grant type at the library
-    // initialization, we need to manually enforce it here for confidential clients.
-    if (grantType === "refresh_token" && !clientSecret) {
-      if (!refreshToken) {
+    // Only client_secret_post is advertised, but the library also reads HTTP
+    // Basic credentials, so reject them to keep the checks below complete.
+    if (/^\s*basic\b/i.test(ctx.request.get("authorization"))) {
+      throw ValidationError(
+        "Unsupported client authentication method, send credentials in the request body"
+      );
+    }
+
+    // The library does not require a client secret for the refresh_token grant
+    // or for PKCE requests, so we enforce it here for confidential clients.
+    if (!clientSecret) {
+      if (grantType === "refresh_token" && !refreshToken) {
         throw ValidationError(
           "Missing refresh_token for refresh_token grant type"
         );
       }
       if (!clientId) {
-        throw ValidationError("Missing client_id for refresh_token grant type");
+        throw ValidationError("Missing client_id");
       }
       const client = await OAuthClient.findByClientId(clientId);
       if (!client) {
@@ -206,10 +215,9 @@ router.post(
       throw NotFoundError();
     }
 
-    const clientType =
-      token_endpoint_auth_method === "client_secret_post"
-        ? "confidential"
-        : "public";
+    const clientType = OAuthHelper.clientTypeForAuthMethod(
+      token_endpoint_auth_method
+    );
 
     const client = await OAuthClient.createWithCtx(ctx, {
       // RFC 7591 makes client_name optional; fall back to a generic label so

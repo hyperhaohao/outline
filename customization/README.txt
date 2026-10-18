@@ -1,5 +1,14 @@
 瑞玛 Outline 长期定制维护
 
+1.11.0-ruima.1 升级实现：
+直接在 haoX/ruima-custom 合并官方 v1.11.0（cb0207201ed2c8b641809c26e41fbe2bde297072），保留全部既有定制。
+沿用官方 Yarn 4.18.0 与锁定依赖，运行基底固定为官方 Linux/amd64 摘要 sha256:898e4e94aeeb1e95a5d2a637dbcb51393cfd1e041d65381ab182cf2aade585fe。
+上游导出创建已集中至 FileOperation.createExport；文档清单、逐篇授权和凭据来源在该入口统一保留。
+MCP 采用上游 server/mcp 结构，保留工具预检、独立审计、跨凭据读取统计，并兼容 Skills 资源与新版 OAuth 挑战响应。
+组件验收适配 React 19 的 createRoot 与 act。镜像显式包含 MCP Skills 资源，沿用上游迁移并保留既有审计索引迁移。
+实际检查数量、迁移预演、镜像摘要及上线结果以本次发布归档和知识库升级记录为准。
+customization/release.json 与 ruima-publish.yml 是 ruima.1 历史发布配置，本次升级不触发旧归档发布流程。
+
 维护仓库：https://github.com/hyperhaohao/outline
 长期维护分支：haoX/ruima-custom
 后续定制功能、问题修复和 Outline 上游版本升级统一基于此分支。

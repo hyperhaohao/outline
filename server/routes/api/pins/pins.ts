@@ -1,4 +1,4 @@
-import Router from "koa-router";
+import Router from "@koa/router";
 import { Sequelize, Op, Transaction } from "sequelize";
 import pinCreator from "@server/commands/pinCreator";
 import auth from "@server/middlewares/authentication";
@@ -69,7 +69,10 @@ router.post(
     const { user } = ctx.state.auth;
     const { documentId, collectionId } = ctx.input.body;
 
-    const document = await Document.findByPk(documentId, { userId: user.id });
+    const document = await Document.findByPk(documentId, {
+      userId: user.id,
+      includeContent: false,
+    });
     authorize(user, "read", document);
 
     // There can be only one pin with these props.

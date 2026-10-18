@@ -1,4 +1,4 @@
-import { action, observable } from "mobx";
+import { action, makeObservable, observable } from "mobx";
 import type { EditorState, Selection } from "prosemirror-state";
 import { NodeSelection, Plugin, TextSelection } from "prosemirror-state";
 import type { EditorView } from "prosemirror-view";
@@ -38,8 +38,21 @@ export default class SelectionToolbarExtension extends Extension {
         view: () => ({
           update: this.handleUpdate,
         }),
+        props: {
+          handleDOMEvents: {
+            focus: (view) => {
+              this.handleUpdate(view, view.state);
+              return false;
+            },
+          },
+        },
       }),
     ];
+  }
+
+  constructor(options: Partial<object> = {}) {
+    super(options);
+    makeObservable(this);
   }
 
   @observable
@@ -114,12 +127,15 @@ export default class SelectionToolbarExtension extends Extension {
     ];
   }
 
-  private handleUpdate = action((view: EditorView) => {
-    const { state } = view;
-    this.state = this.calculateState(state);
+  private handleUpdate = action((view: EditorView, prevState: EditorState) => {
+    this.state = this.calculateState(view, prevState);
   });
 
-  private calculateState(state: EditorState): Selection | boolean {
+  private calculateState(
+    view: EditorView,
+    prevState: EditorState
+  ): Selection | boolean {
+    const { state } = view;
     const { selection, doc, schema } = state;
 
     if (isMarkActive(schema.marks.link)(state)) {
@@ -128,13 +144,10 @@ export default class SelectionToolbarExtension extends Extension {
 
     if (
       isNodeActive(schema.nodes.code_block)(state) ||
-      isNodeActive(schema.nodes.code_fence)(state)
+      isNodeActive(schema.nodes.code_fence)(state) ||
+      (isInNotice(state) && selection.from > 0)
     ) {
-      return selection;
-    }
-
-    if (isInNotice(state) && selection.from > 0) {
-      return selection;
+      return this.isBlockToolbarAllowed(view, prevState) ? selection : false;
     }
 
     if (!selection || selection.empty) {
@@ -173,6 +186,23 @@ export default class SelectionToolbarExtension extends Extension {
     }
 
     return false;
+  }
+
+  /**
+   * Whether a block toolbar can show, only for a selection the user placed.
+   *
+   * @param view The editor view.
+   * @param prevState The editor state before this update.
+   * @returns True if a block toolbar can show for the current selection.
+   */
+  private isBlockToolbarAllowed(view: EditorView, prevState: EditorState) {
+    if (!view.editable || view.hasFocus()) {
+      return true;
+    }
+
+    // Focus moves into the toolbar's own menus, keep it open while they edit
+    // the block.
+    return !!this.state && prevState.selection.eq(view.state.selection);
   }
 
   widget = (props: WidgetProps) => {

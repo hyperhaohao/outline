@@ -173,7 +173,7 @@ export async function beginExportAudit(ctx: AppContext) {
       "documents.export",
       "collections.export",
       "collections.export_all",
-    ].includes(ctx.path.split("/").pop() ?? "")
+    ].includes(ctx.path?.split("/").pop() ?? "")
   ) {
     return;
   }

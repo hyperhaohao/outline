@@ -162,7 +162,7 @@ function Preferences() {
   );
 
   const handleThemeChange = React.useCallback(
-    (theme) => {
+    (theme: string) => {
       ui.setTheme(theme as Theme);
       toast.success(t("Preferences saved"));
     },
@@ -192,7 +192,7 @@ function Preferences() {
             {showOfficialLinks ? (
               <Trans>
                 Choose the interface language. Community translations are
-                accepted though our{" "}
+                accepted through our{" "}
                 <a
                   href="https://translate.getoutline.com"
                   target="_blank"

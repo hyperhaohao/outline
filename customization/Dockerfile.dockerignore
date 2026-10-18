@@ -15,3 +15,6 @@
 !server/
 !server/migrations/
 !server/migrations/20261012055118-security-audit-indexes.js
+!server/mcp/
+!server/mcp/skills/
+!server/mcp/skills/**

@@ -1,4 +1,3 @@
-import { faker } from "@faker-js/faker";
 import sharedEnv from "@shared/env";
 import { TeamPreference } from "@shared/types";
 import { OAuthClientValidation } from "@shared/validations";
@@ -9,6 +8,7 @@ import {
   buildOAuthClient,
   buildTeam,
   buildUser,
+  buildSubdomain,
 } from "@server/test/factories";
 import { getTestServer } from "@server/test/support";
 
@@ -19,7 +19,7 @@ describe("#oauth.register", () => {
   let subdomain: string;
 
   beforeEach(async () => {
-    subdomain = faker.internet.domainWord();
+    subdomain = buildSubdomain();
     team = await buildTeam({ subdomain });
   });
 
@@ -42,7 +42,7 @@ describe("#oauth.register", () => {
     expect(body.client_secret_expires_at).toBeUndefined();
     expect(body.client_name).toEqual("Test MCP Client");
     expect(body.redirect_uris).toEqual(["https://example.com/callback"]);
-    expect(body.grant_types).toEqual(["authorization_code"]);
+    expect(body.grant_types).toEqual(["authorization_code", "refresh_token"]);
     expect(body.response_types).toEqual(["code"]);
     expect(body.token_endpoint_auth_method).toEqual("none");
     expect(body.registration_access_token).toBeTruthy();
@@ -57,6 +57,22 @@ describe("#oauth.register", () => {
     expect(client!.createdById).toBeNull();
     expect(client!.clientType).toEqual("public");
     expect(client!.published).toEqual(false);
+  });
+
+  it("should register a native app client with a private-use scheme redirect URI", async () => {
+    const res = await server.post("/oauth/register", {
+      body: {
+        client_name: "Native App",
+        redirect_uris: ["com.example.app:/oauth2redirect"],
+      },
+      headers: {
+        host: `${subdomain}.outline.dev`,
+      },
+    });
+
+    expect(res.status).toEqual(201);
+    const body = await res.json();
+    expect(body.redirect_uris).toEqual(["com.example.app:/oauth2redirect"]);
   });
 
   it("should register a confidential client", async () => {
@@ -174,6 +190,23 @@ describe("#oauth.register", () => {
     expect(res.status).toEqual(201);
   });
 
+  it("should reject duplicate redirect_uris", async () => {
+    const res = await server.post("/oauth/register", {
+      body: {
+        client_name: "Test Client",
+        redirect_uris: [
+          "https://example.com/callback",
+          "https://example.com/callback",
+        ],
+      },
+      headers: {
+        host: `${subdomain}.outline.dev`,
+      },
+    });
+
+    expect(res.status).toEqual(400);
+  });
+
   it("should reject too many redirect_uris and report the received count", async () => {
     const count = OAuthClientValidation.maxRedirectUris + 1;
     const res = await server.post("/oauth/register", {
@@ -255,7 +288,7 @@ describe("#oauth.register management (RFC 7592)", () => {
   let subdomain: string;
 
   beforeEach(async () => {
-    subdomain = faker.internet.domainWord();
+    subdomain = buildSubdomain();
     await buildTeam({ subdomain });
   });
 
@@ -484,6 +517,7 @@ describe("GET /.well-known/oauth-authorization-server", () => {
       "none",
     ]);
     expect(body.code_challenge_methods_supported).toEqual(["S256"]);
+    expect(body.scopes_supported).toEqual(["read", "write"]);
   });
 
   it("should return OAuth metadata at /mcp suffix path", async () => {
@@ -538,7 +572,7 @@ describe("GET /.well-known/oauth-protected-resource", () => {
 
   it("should return 404 when MCP is disabled", async () => {
     const team = await buildTeam({
-      subdomain: faker.internet.domainWord(),
+      subdomain: buildSubdomain(),
       preferences: { [TeamPreference.MCP]: false },
     });
 
@@ -652,5 +686,31 @@ describe("POST /oauth/authorize", () => {
 
     expect(res.status).toEqual(302);
     expect(res.headers.get("location")).toContain("code=");
+  });
+
+  it("should redirect to a private-use scheme redirect URI", async () => {
+    const team = await buildTeam();
+    const user = await buildUser({ teamId: team.id });
+    const client = await buildOAuthClient({
+      teamId: team.id,
+      redirectUris: ["com.example.app:/oauth2redirect"],
+    });
+
+    const res = await server.post("/oauth/authorize", user, {
+      redirect: "manual",
+      body: {
+        client_id: client.clientId,
+        response_type: "code",
+        redirect_uri: "com.example.app:/oauth2redirect",
+        state: "state",
+        scope: "read",
+      },
+    });
+
+    expect(res.status).toEqual(302);
+    const location = res.headers.get("location");
+    expect(location).toMatch(/^com\.example\.app:\/oauth2redirect\?/);
+    expect(location).toContain("code=");
+    expect(location).toContain("state=state");
   });
 });

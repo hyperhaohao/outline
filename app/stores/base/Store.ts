@@ -8,8 +8,15 @@ import {
   lowerFirst,
   orderBy,
 } from "es-toolkit/compat";
-import { observable, action, computed, runInAction } from "mobx";
+import {
+  action,
+  computed,
+  makeObservable,
+  observable,
+  runInAction,
+} from "mobx";
 import pluralize from "pluralize";
+import { isUUID } from "validator";
 import { Pagination } from "@shared/constants";
 import { type JSONObject } from "@shared/types";
 import type RootStore from "~/stores/RootStore";
@@ -54,6 +61,14 @@ export type PaginatedResponse<T> = T[] & {
 // oxlint-disable-next-line no-explicit-any
 export type FetchPageParams = PaginationParams & Record<string, any>;
 
+/**
+ * A store that related models found in an API response can be added to.
+ */
+interface RelatedStore {
+  responseKey: string;
+  add(item: PartialExcept<Model, "id">): unknown;
+}
+
 export default abstract class Store<T extends Model> {
   @observable
   data: Map<string, T> = new Map();
@@ -75,6 +90,12 @@ export default abstract class Store<T extends Model> {
   modelName: string;
 
   apiEndpoint: string;
+
+  /**
+   * The key under which this store's models appear in API responses that
+   * return more than one kind of model, defaults to the API endpoint name.
+   */
+  responseKey: string;
 
   /**
    * Whether the store's data should be persisted to IndexedDB, and restored
@@ -102,11 +123,18 @@ export default abstract class Store<T extends Model> {
     if (!this.apiEndpoint) {
       this.apiEndpoint = pluralize(lowerFirst(model.modelName));
     }
+
+    if (!this.responseKey) {
+      this.responseKey = this.apiEndpoint;
+    }
+
+    makeObservable(this);
   }
 
   @action
   clear() {
     this.data.clear();
+    this.fetchAllResults.clear();
     void this.persistence?.clear();
   }
 
@@ -223,12 +251,16 @@ export default abstract class Store<T extends Model> {
       }
 
       // @ts-expect-error TS thinks that we're instantiating an abstract class here
-      const newModel = new ModelClass(item, this);
+      const newModel: T = new ModelClass(item, this);
       this.data.set(newModel.id, newModel);
       this.persistence?.persist(newModel.id);
+      this.fetchAllResults.clear();
       return newModel;
     }
 
+    if (!this.data.has(item.id)) {
+      this.fetchAllResults.clear();
+    }
     this.data.set(item.id, item);
     this.persistence?.persist(item.id);
     return item;
@@ -289,6 +321,7 @@ export default abstract class Store<T extends Model> {
     }
 
     LifecycleManager.executeHooks(model.constructor, "afterRemove", model);
+    this.fetchAllResults.clear();
 
     // Persists the soft-deleted model, or removes the persisted record if the
     // model was hard-deleted from the store.
@@ -372,7 +405,7 @@ export default abstract class Store<T extends Model> {
         ...options,
       });
 
-      return runInAction(`create#${this.modelName}`, () => {
+      return runInAction(() => {
         invariant(res?.data, "Data should be available");
         this.addPolicies(res.policies);
         return this.add(res.data);
@@ -396,7 +429,7 @@ export default abstract class Store<T extends Model> {
         ...options,
       });
 
-      return runInAction(`update#${this.modelName}`, () => {
+      return runInAction(() => {
         invariant(res?.data, "Data should be available");
         this.addPolicies(res.policies);
         return this.add(res.data);
@@ -463,7 +496,7 @@ export default abstract class Store<T extends Model> {
           id,
         })
         .then((res) =>
-          runInAction(`info#${this.modelName}`, () => {
+          runInAction(() => {
             invariant(res?.data, "Data should be available");
             this.addPolicies(res.policies);
             resolve(this.add(accessor(res)));
@@ -489,7 +522,8 @@ export default abstract class Store<T extends Model> {
     return promise;
   }
 
-  @action
+  // Not annotated: subclasses replace this field, and MobX makes an annotated
+  // field non-writable. The state changes run in runInAction already.
   fetchPage = async (
     params?: FetchPageParams
   ): Promise<PaginatedResponse<T>> => {
@@ -497,33 +531,20 @@ export default abstract class Store<T extends Model> {
       throw new Error(`Cannot list ${this.modelName}`);
     }
 
-    this.isFetching = true;
-
-    try {
-      const res = await client.post(`/${this.apiEndpoint}.list`, params);
-      invariant(res?.data, "Data not available");
-
-      let response: PaginatedResponse<T> = [];
-
-      runInAction(`list#${this.modelName}`, () => {
-        this.addPolicies(res.policies);
-        response = res.data.map(this.add);
-        this.isLoaded = true;
-      });
-
-      response[PAGINATION_SYMBOL] = res.pagination;
-      return response;
-    } finally {
-      this.isFetching = false;
-    }
+    return this.fetchPaginated(`/${this.apiEndpoint}.list`, params);
   };
 
+  /**
+   * Fetches every page of the list endpoint.
+   *
+   * @param params the request parameters.
+   * @returns all fetched items.
+   */
   @action
   fetchAll = async (
-    // oxlint-disable-next-line no-explicit-any
-    params?: Record<string, any>
+    params: FetchPageParams = {}
   ): Promise<PaginatedResponse<T>> => {
-    const limit = params?.limit ?? Pagination.defaultLimit;
+    const limit = params.limit ?? Pagination.defaultLimit;
     const response = await this.fetchPage({ ...params, limit });
 
     invariant(
@@ -544,14 +565,29 @@ export default abstract class Store<T extends Model> {
       ...(fetchPages.length ? await Promise.all(fetchPages) : []),
     ]);
 
-    if (params?.withRelations) {
+    if (params.withRelations) {
       await Promise.all(
         this.orderedData.map((integration) => integration.loadRelations())
       );
     }
 
+    this.fetchAllResults.set(JSON.stringify(params), results);
     return results;
   };
+
+  /**
+   * Fetches every page of the list endpoint unless the same params were
+   * fetched before and no model has been added to or removed from the store
+   * since. Use for reference lists that are loaded on mount.
+   *
+   * @param params the request parameters.
+   * @returns all fetched items.
+   */
+  fetchAllIfNeeded = async (
+    params: FetchPageParams = {}
+  ): Promise<PaginatedResponse<T>> =>
+    this.fetchAllResults.get(JSON.stringify(params)) ??
+    (await this.fetchAll(params));
 
   @computed
   get orderedData(): T[] {
@@ -575,4 +611,79 @@ export default abstract class Store<T extends Model> {
   filter = (predicate: ListPredicate<T>): T[] =>
     // @ts-expect-error not sure why T is incompatible
     filter(this.orderedData, predicate);
+
+  /**
+   * Get an item from the store by ID, or by the urlId at the end of a URL
+   * slug. A UUID cannot end with a urlId, so the slower search by urlId is
+   * skipped for UUIDs, and observers do not track every item in the store.
+   *
+   * @param id the ID or URL slug of the item.
+   * @returns the matching item, if it is in the store.
+   */
+  protected getByIdOrUrlId(id: string): T | undefined {
+    const item = this.data.get(id);
+    if (item || !id || isUUID(id)) {
+      return item;
+    }
+    return this.orderedData.find(
+      (model) =>
+        "urlId" in model &&
+        typeof model.urlId === "string" &&
+        id.endsWith(model.urlId)
+    );
+  }
+
+  /**
+   * Fetch a page of items from the API and add them to the store, along with
+   * any related models in the response that belong to other stores. Items are
+   * read from the response data directly when it is an array, otherwise from
+   * the key of each store.
+   *
+   * @param endpoint the API endpoint to request.
+   * @param params the request parameters.
+   * @param related the stores that related models in the response are added to.
+   * @returns the fetched items, with pagination information attached.
+   */
+  protected async fetchPaginated(
+    endpoint: string,
+    params?: FetchPageParams,
+    related: RelatedStore[] = []
+  ): Promise<PaginatedResponse<T>> {
+    runInAction(() => {
+      this.isFetching = true;
+    });
+
+    try {
+      const res = await client.post(endpoint, params);
+      invariant(res?.data, "Data not available");
+
+      let response: PaginatedResponse<T> = [];
+
+      runInAction(() => {
+        this.addPolicies(res.policies);
+
+        related.forEach((store) => {
+          res.data[store.responseKey]?.forEach(
+            (item: PartialExcept<Model, "id">) => store.add(item)
+          );
+        });
+
+        const items = Array.isArray(res.data)
+          ? res.data
+          : res.data[this.responseKey];
+        response = items.map(this.add);
+        this.isLoaded = true;
+      });
+
+      response[PAGINATION_SYMBOL] = res.pagination;
+      return response;
+    } finally {
+      runInAction(() => {
+        this.isFetching = false;
+      });
+    }
+  }
+
+  /** Results of `fetchAll` calls keyed by their params, see `fetchAllIfNeeded`. */
+  private fetchAllResults = new Map<string, PaginatedResponse<T>>();
 }

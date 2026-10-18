@@ -3,17 +3,9 @@ import fractionalIndex from "fractional-index";
 import fs from "fs-extra";
 import invariant from "invariant";
 import contentDisposition from "content-disposition";
-import Router from "koa-router";
-import {
-  authorizeExport,
-  authorizeExportDocuments,
-  exportDocumentIds,
-} from "@server/security/exportAuthorization";
-import {
-  identityFromContext,
-  recordAudit,
-  exportAuditOrigin,
-} from "@server/security/audit";
+import Router from "@koa/router";
+import { authorizeExport } from "@server/security/exportAuthorization";
+import { identityFromContext, recordAudit } from "@server/security/audit";
 import { escapeRegExp, has, remove, uniq } from "es-toolkit/compat";
 import mime from "mime-types";
 import type { Order, ScopeOptions, WhereOptions } from "sequelize";
@@ -25,8 +17,6 @@ import { type NavigationNode } from "@shared/types";
 import {
   ExportContentType,
   FileOperationFormat,
-  FileOperationState,
-  FileOperationType,
   StatusFilter,
   UserRole,
 } from "@shared/types";
@@ -309,12 +299,13 @@ router.post(
     // Sort=index needs the collection's documentStructure for ordering and
     // pagination. Only meaningful when the filter targets a single collection.
     let documentIds: string[] = [];
+    let collection: Collection | null | undefined;
     const explicitCollectionId =
       filter !== undefined
         ? extractTopLevelEqValue(filter, "collectionId")
         : undefined;
     if (explicitCollectionId && sort === "index") {
-      const collection = await Collection.findByPk(explicitCollectionId, {
+      collection = await Collection.findByPk(explicitCollectionId, {
         userId: user.id,
         includeDocumentStructure: true,
       });
@@ -329,7 +320,9 @@ router.post(
     // public-API `documentId` field is renamed to the underlying `id` column;
     // `userId` is handled inside `buildWhere` (maps to `collaboratorIds`).
     if (filter) {
-      await authorizeFilterFields(user, filter);
+      await authorizeFilterFields(user, filter, {
+        collections: collection ? [collection] : undefined,
+      });
       const mapped = mapFilterFields(filter, { documentId: "id" });
       where[Op.and].push(buildWhere<Document>(mapped));
     }
@@ -462,10 +455,13 @@ router.post(
             documentIds,
           },
         }),
+      // The membership includes are LEFT JOINs that never filter rows, so
+      // the total can be counted without them.
       () =>
-        Document.withMembershipScope(user.id, { includeDrafts }).count({
-          where,
-        })
+        (includeDrafts
+          ? Document.unscoped()
+          : Document.scope("defaultScope")
+        ).count({ where })
     );
 
     const data = await presentDocuments(ctx, documents);
@@ -616,8 +612,11 @@ router.post(
   async (ctx: APIContext<T.DocumentsViewedReq>) => {
     const { sort, direction } = ctx.input.body;
     const { user } = ctx.state.auth;
-    const collectionIds = await user.collectionIds();
     const userId = user.id;
+    const [collectionIds, membershipDocumentIds] = await Promise.all([
+      user.collectionIds(),
+      Document.membershipDocumentIds(userId),
+    ]);
     const views = await View.findAll({
       where: {
         userId,
@@ -627,12 +626,28 @@ router.post(
         {
           model: Document.scope([
             "withDrafts",
+            "withoutState",
             { method: ["withMembership", userId] },
           ]),
           required: true,
           where: {
             teamId: user.teamId,
-            collectionId: collectionIds,
+            [Op.and]: [
+              {
+                [Op.or]: [
+                  { collectionId: collectionIds },
+                  { id: membershipDocumentIds },
+                  { createdById: userId, collectionId: { [Op.is]: null } },
+                ],
+              },
+              {
+                [Op.or]: [
+                  { publishedAt: { [Op.ne]: null } },
+                  { createdById: userId },
+                  { id: membershipDocumentIds },
+                ],
+              },
+            ],
           },
         },
       ],
@@ -721,15 +736,15 @@ router.post(
     const { id, shareId } = ctx.input.body;
     const { user } = ctx.state.auth;
     const apiVersion = getAPIVersion(ctx);
-    const teamFromCtx = await getTeamFromContext(ctx, {
-      includeOAuthState: false,
-    });
 
     let document: Document | null;
     let serializedDocument: Record<string, unknown> | undefined;
     let isPublic = false;
 
     if (shareId) {
+      const teamFromCtx = await getTeamFromContext(ctx, {
+        includeOAuthState: false,
+      });
       const result = await loadPublicShare({
         id: shareId,
         documentId: id,
@@ -802,7 +817,10 @@ router.post(
     const { id, startDate, endDate } = ctx.input.body;
     const { user } = ctx.state.auth;
 
-    const document = await Document.findByPk(id, { userId: user.id });
+    const document = await Document.findByPk(id, {
+      userId: user.id,
+      includeContent: false,
+    });
     authorize(user, "listViews", document);
 
     if (!document.insightsEnabled) {
@@ -839,6 +857,7 @@ router.post(
     const actor = ctx.state.auth.user;
     const document = await Document.findByPk(id, {
       userId: actor.id,
+      includeContent: false,
     });
     authorize(actor, "read", document);
 
@@ -921,7 +940,10 @@ router.post(
   async (ctx: APIContext<T.DocumentsChildrenReq>) => {
     const { id } = ctx.input.body;
     const { user } = ctx.state.auth;
-    const document = await Document.findByPk(id, { userId: user.id });
+    const document = await Document.findByPk(id, {
+      userId: user.id,
+      includeContent: false,
+    });
 
     authorize(user, "read", document);
 
@@ -995,27 +1017,10 @@ router.post(
         );
       }
 
-      const exportedDocumentIds = await exportDocumentIds(document);
-      await authorizeExportDocuments(user, exportedDocumentIds);
-      const fileOperation = await FileOperation.createWithCtx(ctx, {
-        type: FileOperationType.Export,
-        state: FileOperationState.Creating,
+      const fileOperation = await FileOperation.createExport(ctx, {
+        document,
         format,
-        key: FileOperation.getExportKey({
-          name: document.titleWithDefault,
-          teamId: document.teamId,
-          format,
-        }),
-        url: null,
-        size: 0,
-        documentId: document.id,
-        options: { audit: exportAuditOrigin(ctx), exportedDocumentIds },
-        userId: user.id,
-        teamId: document.teamId,
       });
-
-      fileOperation.user = user;
-      fileOperation.document = document;
 
       ctx.body = {
         success: true,
@@ -1476,6 +1481,11 @@ router.post(
     const { transaction } = ctx.state;
     const { id, insightsEnabled, publish, collectionId, ...input } =
       ctx.input.body;
+    const updatingDeprecatedReason =
+      input.deprecatedReason !== undefined &&
+      Object.keys(ctx.input.body).every(
+        (key) => key === "id" || key === "deprecatedReason"
+      );
     const editorVersion = ctx.headers["x-editor-version"] as string | undefined;
 
     const { user } = ctx.state.auth;
@@ -1484,10 +1494,19 @@ router.post(
     let document = await Document.findByPk(id, {
       userId: user.id,
       includeState: true,
+      paranoid: !updatingDeprecatedReason,
       transaction,
     });
     collection = document?.collection;
-    authorize(user, "update", document);
+    authorize(
+      user,
+      updatingDeprecatedReason ? "updateDeprecatedReason" : "update",
+      document
+    );
+
+    if (!updatingDeprecatedReason && input.deprecatedReason !== undefined) {
+      authorize(user, "updateDeprecatedReason", document);
+    }
 
     if (collection && insightsEnabled !== undefined) {
       authorize(user, "updateInsights", document);
@@ -1654,7 +1673,7 @@ router.post(
   validate(T.DocumentsArchiveSchema),
   transaction(),
   async (ctx: APIContext<T.DocumentsArchiveReq>) => {
-    const { id } = ctx.input.body;
+    const { id, reason } = ctx.input.body;
     const { user } = ctx.state.auth;
     const { transaction } = ctx.state;
 
@@ -1664,6 +1683,10 @@ router.post(
       transaction,
     });
     authorize(user, "archive", document);
+
+    if (reason !== undefined) {
+      document.deprecatedReason = reason || null;
+    }
 
     await document.archiveWithCtx(ctx);
 
@@ -1682,7 +1705,7 @@ router.post(
   transaction(),
   async (ctx: APIContext<T.DocumentsDeleteReq>) => {
     const { transaction } = ctx.state;
-    const { id, permanent } = ctx.input.body;
+    const { id, permanent, reason } = ctx.input.body;
     const { user } = ctx.state.auth;
 
     if (permanent) {
@@ -1709,6 +1732,10 @@ router.post(
       });
 
       authorize(user, "delete", document);
+
+      if (reason !== undefined) {
+        document.deprecatedReason = reason || null;
+      }
 
       await document.destroyWithCtx(ctx);
     }

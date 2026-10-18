@@ -1,3 +1,4 @@
+// @vitest-isolate true
 import { randomUUID } from "node:crypto";
 import {
   CollectionPermission,

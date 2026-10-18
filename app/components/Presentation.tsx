@@ -3,7 +3,7 @@ import { Suspense } from "react";
 import useStores from "~/hooks/useStores";
 import { client } from "~/utils/ApiClient";
 import DocumentSecurity from "./DocumentSecurity";
-import lazyWithRetry from "~/utils/lazyWithRetry";
+import lazyWithRetry from "@shared/utils/lazyWithRetry";
 
 const PresentationMode = lazyWithRetry(
   () => import("~/scenes/Document/components/PresentationMode")

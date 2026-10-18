@@ -1,7 +1,15 @@
 import { randomUUID } from "node:crypto";
 import path from "node:path";
-import { FileOperationFormat } from "@shared/types";
+import { EmptyResultError } from "sequelize";
 import {
+  FileOperationFormat,
+  FileOperationState,
+  FileOperationType,
+} from "@shared/types";
+import { createContext } from "@server/context";
+import {
+  buildCollection,
+  buildDocument,
   buildFileOperation,
   buildTeam,
   buildUser,
@@ -10,6 +18,82 @@ import { ValidateKey } from "@server/validation";
 import FileOperation from "./FileOperation";
 
 describe("FileOperation", () => {
+  describe("createExport", () => {
+    it("should create a team export with the requested options", async () => {
+      const team = await buildTeam();
+      const user = await buildUser({ teamId: team.id });
+
+      const fileOperation = await FileOperation.createExport(
+        createContext({ user }),
+        { team, includeAttachments: false, includePrivate: false }
+      );
+
+      expect(fileOperation.type).toBe(FileOperationType.Export);
+      expect(fileOperation.state).toBe(FileOperationState.Creating);
+      expect(fileOperation.format).toBe(FileOperationFormat.MarkdownZip);
+      expect(fileOperation.key).toContain(`uploads/${team.id}/`);
+      expect(fileOperation.options).toMatchObject({
+        includeAttachments: false,
+        includePrivate: false,
+        exportedDocumentIds: [],
+        audit: { channel: "web", traceId: expect.any(String) },
+      });
+      expect(fileOperation.user.id).toBe(user.id);
+    });
+
+    it("should set the collection association for a collection export", async () => {
+      const team = await buildTeam();
+      const user = await buildUser({ teamId: team.id });
+      const collection = await buildCollection({ teamId: team.id });
+
+      const fileOperation = await FileOperation.createExport(
+        createContext({ user }),
+        { team, collection }
+      );
+
+      expect(fileOperation.collectionId).toBe(collection.id);
+      expect(fileOperation.collection?.id).toBe(collection.id);
+      expect(fileOperation.options).toMatchObject({
+        includeAttachments: true,
+        includePrivate: true,
+        exportedDocumentIds: [],
+        audit: { channel: "web", traceId: expect.any(String) },
+      });
+    });
+
+    it("统一创建入口保存实际文档清单与凭据来源", async () => {
+      const team = await buildTeam();
+      const user = await buildUser({ teamId: team.id });
+      const collection = await buildCollection({
+        teamId: team.id,
+        userId: user.id,
+      });
+      const document = await buildDocument({
+        teamId: team.id,
+        userId: user.id,
+        collectionId: collection.id,
+      });
+      const ctx = createContext({ user });
+      ctx.state.securityTraceId = randomUUID();
+      ctx.state.credentialId = randomUUID();
+
+      const operation = await FileOperation.createExport(ctx, {
+        document,
+        format: FileOperationFormat.MarkdownZip,
+      });
+
+      expect(operation.document?.id).toBe(document.id);
+      expect(operation.options).toMatchObject({
+        exportedDocumentIds: [document.id],
+        audit: {
+          traceId: ctx.state.securityTraceId,
+          credentialId: ctx.state.credentialId,
+          channel: "web",
+        },
+      });
+    });
+  });
+
   describe("getExportKey", () => {
     it("should write to the uploads bucket", () => {
       const teamId = randomUUID();
@@ -70,6 +154,12 @@ describe("FileOperation", () => {
           rejectOnEmpty: error,
         })
       ).rejects.toThrow(error);
+    });
+
+    it("should throw when rejectOnEmpty is set and the id is not a string", async () => {
+      await expect(
+        FileOperation.findByPk(123, { rejectOnEmpty: true })
+      ).rejects.toThrow(EmptyResultError);
     });
   });
 });

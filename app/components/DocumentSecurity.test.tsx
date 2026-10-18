@@ -1,5 +1,5 @@
-import { render, unmountComponentAtNode } from "react-dom";
-import { act } from "react-dom/test-utils";
+import { createRoot, type Root } from "react-dom/client";
+import { act } from "react";
 import { ThemeProvider } from "styled-components";
 import { light } from "@shared/styles/theme";
 import { UserRole } from "@shared/types";
@@ -13,16 +13,16 @@ vi.mock("~/hooks/useStores", () => ({ default: () => stores }));
 /** 模拟服务器权限刷新，验证水印不污染正文且分屏打印状态能够恢复。 */
 describe("工作区水印与动态打印保护", () => {
   let container: HTMLDivElement;
+  let root: Root;
   const blocked = () =>
     document.documentElement.hasAttribute("data-outline-print-blocked");
   const mount = (ids: string[]) =>
-    render(
+    root.render(
       <ThemeProvider theme={light}>
         {ids.map((id) => (
           <DocumentSecurity key={id} documentId={id} />
         ))}
-      </ThemeProvider>,
-      container
+      </ThemeProvider>
     );
 
   beforeEach(() => {
@@ -30,6 +30,8 @@ describe("工作区水印与动态打印保护", () => {
     container = document.createElement("div");
     container.textContent = "正文保持不变";
     document.body.append(container);
+    root = createRoot(container);
+    Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
     const user = stores.users.add({
       id: "watermark-user",
       name: "测试管理员",
@@ -60,7 +62,7 @@ describe("工作区水印与动态打印保护", () => {
 
   afterEach(() => {
     act(() => {
-      unmountComponentAtNode(container);
+      root.unmount();
     });
     container.remove();
     stores.auth.currentUserId = null;

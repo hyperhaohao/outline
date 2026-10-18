@@ -1,7 +1,7 @@
 import type { ButtonHTMLAttributes } from "react";
 import { observable, runInAction } from "mobx";
-import { render, unmountComponentAtNode } from "react-dom";
-import { act } from "react-dom/test-utils";
+import { createRoot, type Root } from "react-dom/client";
+import { act } from "react";
 import { vi } from "vitest";
 import ErrorBoundary from "./ErrorBoundary";
 
@@ -32,17 +32,20 @@ function handleExpectedError(event: ErrorEvent) {
 
 describe("错误页面的官方反馈入口", () => {
   let container: HTMLDivElement;
+  let root: Root;
 
   beforeEach(() => {
     container = document.createElement("div");
     document.body.append(container);
+    root = createRoot(container);
+    Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
     window.addEventListener("error", handleExpectedError);
     vi.spyOn(console, "error").mockImplementation(() => undefined);
   });
 
   afterEach(() => {
     act(() => {
-      unmountComponentAtNode(container);
+      root.unmount();
     });
     container.remove();
     window.removeEventListener("error", handleExpectedError);
@@ -70,11 +73,10 @@ describe("错误页面的官方反馈入口", () => {
       auth.isFetching = loading;
     });
     act(() => {
-      render(
+      root.render(
         <ErrorBoundary component="div">
           <BrokenContent />
-        </ErrorBoundary>,
-        container
+        </ErrorBoundary>
       );
     });
     const detail = [...container.querySelectorAll("button")].find((button) =>

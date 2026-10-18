@@ -7,6 +7,8 @@ import {
 } from "@server/security/exportAuthorization";
 import { recordAudit, type AuditIdentity } from "@server/security/audit";
 import { truncate } from "es-toolkit/compat";
+import { Op } from "sequelize";
+import type { WhereOptions } from "sequelize";
 import type { ZipFile } from "yazl";
 import { toError } from "@shared/utils/error";
 import type { NavigationNode } from "@shared/types";
@@ -27,17 +29,19 @@ import {
   User,
 } from "@server/models";
 import fileOperationPresenter from "@server/presenters/fileOperation";
+import { sequelizeReadOnly } from "@server/storage/database";
 import FileStorage from "@server/storage/files";
 import { BaseTask, TaskPriority } from "./base/BaseTask";
-import { Op } from "sequelize";
-import { sequelizeReadOnly } from "@server/storage/database";
-import type { WhereOptions } from "sequelize";
 
 type Props = {
   fileOperationId: string;
 };
 
 export default abstract class ExportTask extends BaseTask<Props> {
+  protected jobId({ fileOperationId }: Props) {
+    return `export:${fileOperationId}`;
+  }
+
   /**
    * Transforms the data to be exported, uploads, and notifies user.
    *
@@ -188,13 +192,16 @@ export default abstract class ExportTask extends BaseTask<Props> {
     user: User
   ): Promise<string> {
     if (fileOperation.documentId) {
-      const document = await Document.findByPk(fileOperation.documentId!, {
-        include: {
-          model: Collection.scope("withDocumentStructure"),
-          as: "collection",
-        },
-        rejectOnEmpty: true,
-      });
+      const document = await sequelizeReadOnly.transaction((transaction) =>
+        Document.findByPk(fileOperation.documentId!, {
+          include: {
+            model: Collection.scope("withDocumentStructure"),
+            as: "collection",
+          },
+          rejectOnEmpty: true,
+          transaction,
+        })
+      );
 
       const documentStructure = document.collection?.getDocumentTree(
         document.id
@@ -253,10 +260,11 @@ export default abstract class ExportTask extends BaseTask<Props> {
       };
     }
 
-    const collections = await Collection.scope("withDocumentStructure").findAll(
-      {
+    const collections = await sequelizeReadOnly.transaction((transaction) =>
+      Collection.scope("withDocumentStructure").findAll({
         where,
-      }
+        transaction,
+      })
     );
 
     await verifyExportTree(

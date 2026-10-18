@@ -1,3 +1,4 @@
+// @vitest-isolate true
 import type { Mock } from "vitest";
 import { randomString } from "@shared/random";
 import { UnfurlResourceType } from "@shared/types";
@@ -441,6 +442,26 @@ Install instructions here.`
     const body = await res.json();
     expect(res.status).toEqual(200);
     expect(body.url).toContain(`/s/${share.id}/doc/`);
+  });
+
+  it("should return 404 for share url with an invalid document slug", async () => {
+    const document = await buildDocument({
+      teamId: user.teamId,
+    });
+    const share = await buildShare({
+      teamId: user.teamId,
+      userId: user.id,
+      documentId: document.id,
+      includeChildDocuments: true,
+      published: true,
+    });
+
+    const res = await server.post("/api/urls.unfurl", user, {
+      body: {
+        url: `${env.URL}/s/${share.id}/doc/invalid`,
+      },
+    });
+    expect(res.status).toEqual(404);
   });
 
   it("should return 204 for collection share url without document", async () => {

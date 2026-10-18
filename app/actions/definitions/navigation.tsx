@@ -19,7 +19,7 @@ import { UrlHelper } from "@shared/utils/UrlHelper";
 import { isMac } from "@shared/utils/browser";
 import stores from "~/stores";
 import type SearchQuery from "~/models/SearchQuery";
-import KeyboardShortcuts from "~/scenes/KeyboardShortcuts";
+import KeyboardShortcuts from "~/components/KeyboardShortcuts";
 import {
   createAction,
   createExternalLinkAction,
@@ -56,6 +56,7 @@ export const navigateToRecentSearchQueryActionFactory = (
     name: searchQuery.query,
     analyticsName: "Navigate to recent search query",
     icon: <SearchIcon />,
+    visible: ({ isMCP }) => !isMCP,
     to: searchPath({ query: searchQuery.query }),
   });
 

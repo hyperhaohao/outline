@@ -148,6 +148,19 @@ export async function buildSubscription(overrides: Partial<Subscription> = {}) {
   });
 }
 
+/**
+ * Builds a random team subdomain that is unique across parallel test files.
+ *
+ * @returns a valid, unique subdomain string.
+ */
+export function buildSubdomain() {
+  return `${faker.word.noun().toLowerCase()}-${randomString({
+    length: 8,
+    charset: "alphanumeric",
+    capitalization: "lowercase",
+  })}`;
+}
+
 export function buildTeam(
   overrides: Omit<Partial<Team>, "authenticationProviders"> & {
     authenticationProviders?: Partial<AuthenticationProvider>[];
@@ -861,9 +874,13 @@ export async function buildOAuthClient(overrides: Partial<OAuthClient> = {}) {
   );
 }
 
-export async function buildOAuthAuthorizationCode(
-  overrides: Partial<OAuthAuthorizationCode> = {}
-) {
+export async function buildOAuthAuthorizationCode({
+  code = randomString(32),
+  ...overrides
+}: Partial<OAuthAuthorizationCode> & {
+  /** The plaintext code, used to exchange the code in a test. */
+  code?: string;
+} = {}) {
   if (!overrides.userId) {
     const user = await buildUser();
     overrides.userId = user.id;
@@ -872,8 +889,6 @@ export async function buildOAuthAuthorizationCode(
   if (!overrides.expiresAt) {
     overrides.expiresAt = new Date();
   }
-
-  const code = randomString(32);
 
   let client;
   if (overrides.oauthClientId) {
@@ -961,7 +976,7 @@ export function buildMention(overrides: {
     attrs: {
       id: overrides.id ?? randomUUID(),
       type: overrides.type ?? MentionType.User,
-      label: overrides.label ?? faker.name.fullName(),
+      label: overrides.label ?? faker.person.fullName(),
       modelId: overrides.modelId,
       actorId: overrides.actorId,
     },

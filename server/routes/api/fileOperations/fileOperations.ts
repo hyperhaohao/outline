@@ -1,4 +1,4 @@
-import Router from "koa-router";
+import Router from "@koa/router";
 import { FileOperationType } from "@shared/types";
 import { authorizeExportOperation } from "@server/security/exportAuthorization";
 import { identityFromContext, recordAudit } from "@server/security/audit";

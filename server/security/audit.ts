@@ -39,7 +39,7 @@ export function identityFromContext(
   return {
     user,
     traceId: ctx.state.securityTraceId ?? randomUUID(),
-    channel: ctx.originalUrl.startsWith("/mcp")
+    channel: ctx.originalUrl?.startsWith("/mcp")
       ? "mcp"
       : (ctx.state.auth?.type ?? ctx.state.auditAuthType) ===
           AuthenticationType.APP
@@ -47,7 +47,7 @@ export function identityFromContext(
         : "api",
     credentialId: ctx.state.credentialId,
     clientId: ctx.state.auditClientId,
-    ip: ctx.request.ip,
+    ip: ctx.request?.ip ?? ctx.context?.ip ?? undefined,
   };
 }
 

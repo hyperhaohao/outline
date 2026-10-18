@@ -123,8 +123,7 @@ function ApiKeys() {
       <Text as="p" type="secondary">
         {showOfficialLinks ? (
           <Trans
-            defaults="API keys can be used to authenticate with the API and programatically control
-          your workspace's data. For more details see the <em>developer documentation</em>."
+            defaults="API keys can be used to authenticate with the API and programmatically control your workspace’s data. For more details see the <em>developer documentation</em>."
             components={{
               em: (
                 <a

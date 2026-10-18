@@ -10,7 +10,7 @@ import {
   TextEditMode,
   SortFilter,
 } from "@shared/types";
-import { DocumentValidation } from "@shared/validations";
+import { DeprecationValidation, DocumentValidation } from "@shared/validations";
 import { BaseSchema } from "@server/routes/api/schema";
 import { zodIconType, zodIdType, zodShareIdType } from "@server/utils/zod";
 import { ValidateColor } from "@server/validation";
@@ -23,6 +23,7 @@ const documentFilterFields = {
   title: "string",
   templateId: "uuid",
   collectionId: "uuid",
+  createdById: { kind: "uuid", operators: ["eq", "in"] },
   // `userId` maps to the collaboratorIds array column and only supports
   // membership checks.
   userId: { kind: "uuid", operators: ["eq", "in"] },
@@ -114,7 +115,7 @@ const BaseSearchSchema = DateFilterSchema.extend({
   /** Min words to be shown in the results snippets */
   snippetMinWords: z.number().prefault(20),
 
-  /** Max words to be accomodated in the results snippets */
+  /** Max words to be accommodated in the results snippets */
   snippetMaxWords: z.number().prefault(30),
 });
 
@@ -216,7 +217,16 @@ export const DocumentsDeletedSchema = BaseSchema.extend({
 export type DocumentsDeletedReq = z.infer<typeof DocumentsDeletedSchema>;
 
 export const DocumentsViewedSchema = BaseSchema.extend({
-  body: DocumentsSortParamsSchema.extend({}),
+  body: z.object({
+    /** Sort by a column of the view record, not the document */
+    sort: z.enum(["updatedAt", "createdAt"]).prefault("updatedAt"),
+
+    /** Specifies the sort order with respect to sort field */
+    direction: z
+      .string()
+      .optional()
+      .transform((val) => (val !== "ASC" ? "DESC" : val)),
+  }),
 });
 
 export type DocumentsViewedReq = z.infer<typeof DocumentsViewedSchema>;
@@ -380,6 +390,13 @@ export type DocumentsTemplatizeReq = z.infer<typeof DocumentsTemplatizeSchema>;
 
 export const DocumentsUpdateSchema = BaseSchema.extend({
   body: BaseIdSchema.extend({
+    /** The reason the document is archived or deleted. */
+    deprecatedReason: z
+      .string()
+      .trim()
+      .max(DeprecationValidation.maxReasonLength)
+      .nullish(),
+
     /** Doc title to be updated */
     title: z.string().optional(),
 
@@ -493,13 +510,26 @@ export const DocumentsMoveSchema = BaseSchema.extend({
 export type DocumentsMoveReq = z.infer<typeof DocumentsMoveSchema>;
 
 export const DocumentsArchiveSchema = BaseSchema.extend({
-  body: BaseIdSchema,
+  body: BaseIdSchema.extend({
+    /** The reason for archiving the document. */
+    reason: z
+      .string()
+      .trim()
+      .max(DeprecationValidation.maxReasonLength)
+      .nullish(),
+  }),
 });
 
 export type DocumentsArchiveReq = z.infer<typeof DocumentsArchiveSchema>;
 
 export const DocumentsDeleteSchema = BaseSchema.extend({
   body: BaseIdSchema.extend({
+    /** The reason for deleting the document. */
+    reason: z
+      .string()
+      .trim()
+      .max(DeprecationValidation.maxReasonLength)
+      .nullish(),
     /** Whether to permanently delete the doc as opposed to soft-delete */
     permanent: z.boolean().optional(),
   }),
