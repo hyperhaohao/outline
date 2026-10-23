@@ -3,6 +3,7 @@
 1.12.0-ruima.1 升级实现：
 基于官方稳定标签 v1.12.0，保留全部瑞玛入口、导出、打印、水印和审计定制。
 运行基底固定为官方 Linux/amd64 摘要 sha256:5d506854fed4940177e37cec1a28e9189dd26f404faafaa978a746038b6c2dfb，实际 Node.js 为 26.12.1。
+运行包同时复制 build/package.json，确保 MCP 上报的版本与瑞玛应用版本一致。
 MCP SDK v2 的 http.authInfo 上下文保留可信审计身份；get_document_changes 同时检查 revisions.list/info，并统计返回差异正文。
 个人导出同时保存 personalOwnerId、实际文档清单与凭据来源；管理员全库导出排除原生个人集合。
 启用原生个人文档，沿用 Member/管理员可创建的官方权限；旧个人空间集合保持原位，不自动迁移或扩大角色权限。

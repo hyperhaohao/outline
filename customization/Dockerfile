@@ -12,4 +12,5 @@ COPY --chown=1001:1001 build/shared/ /opt/outline/build/shared/
 COPY --chown=1001:1001 build/plugins/ /opt/outline/build/plugins/
 COPY --chown=1001:1001 server/migrations/20261012055118-security-audit-indexes.js /opt/outline/server/migrations/
 COPY --chown=1001:1001 server/mcp/skills/ /opt/outline/server/mcp/skills/
+COPY --chown=1001:1001 build/package.json /opt/outline/build/package.json
 COPY --chown=1001:1001 package.json LICENSE /opt/outline/
