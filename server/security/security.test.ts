@@ -26,6 +26,8 @@ import { getTestServer } from "@server/test/support";
 import ExportMarkdownZipTask from "@server/queues/tasks/ExportMarkdownZipTask";
 import SecurityAuditRetentionTask from "@server/queues/tasks/SecurityAuditRetentionTask";
 import { recordAudit } from "./audit";
+import { allowedTool } from "./mcpAudit";
+import { withTracing } from "@server/mcp/util";
 import { authorizeExportOperation } from "./exportAuthorization";
 import { readRiskConfig, readRiskScript, recordRead } from "./readRisk";
 
@@ -498,5 +500,74 @@ describe("导出与风险审计", () => {
     expect(await Event.findByPk(oldAudit.id)).toBeNull();
     expect(await Event.findByPk(business.id)).not.toBeNull();
     expect(await Event.findByPk(recent.id)).not.toBeNull();
+  });
+});
+
+describe("1.12.0 定制兼容", () => {
+  it("差异工具必须同时具备修订列表和修订正文作用域", () => {
+    expect(allowedTool("get_document_changes", ["/api/revisions.list"])).toBe(
+      "credential_scope"
+    );
+    expect(allowedTool("get_document_changes", ["/api/revisions.info"])).toBe(
+      "credential_scope"
+    );
+    expect(
+      allowedTool("get_document_changes", [
+        "/api/revisions.list",
+        "/api/revisions.info",
+      ])
+    ).toBe("allowed");
+  });
+
+  it("SDK v2 上下文中的审计身份保留差异正文读取统计", async () => {
+    const { user, document } = await fixture();
+    const traceId = randomUUID();
+    const diff = "+仅用于合成测试的历史正文";
+    const identity = {
+      user,
+      traceId,
+      channel: "mcp" as const,
+      credentialId: randomUUID(),
+    };
+    const handler = withTracing(
+      "get_document_changes",
+      async (_input: { id: string }, _context: object) => ({
+        content: [{ type: "text" as const, text: diff }],
+      })
+    );
+    await handler(
+      { id: document.id },
+      { http: { authInfo: { extra: { user, auditIdentity: identity } } } }
+    );
+    const events = await Event.findAll({
+      where: { name: "security.audit", data: { traceId } },
+    });
+    expect(events).toHaveLength(1);
+    expect(events[0].data).toMatchObject({
+      channel: "mcp",
+      credentialId: identity.credentialId,
+      operation: "get_document_changes",
+      documentCount: 1,
+      returnedBytes: Buffer.byteLength(diff),
+    });
+    expect(JSON.stringify(events[0].data)).not.toContain(diff);
+  });
+
+  it("个人导出移动至普通集合后仍不能交给其他管理员下载", async () => {
+    const { user, admin, team, document } = await fixture();
+    const operation = await buildFileOperation({
+      type: FileOperationType.Export,
+      state: FileOperationState.Complete,
+      teamId: team.id,
+      userId: user.id,
+      documentId: document.id,
+      options: { personalOwnerId: user.id, exportedDocumentIds: [document.id] },
+    });
+    await expect(
+      authorizeExportOperation(admin.id, operation)
+    ).rejects.toThrow();
+    await expect(
+      authorizeExportOperation(user.id, operation)
+    ).resolves.toBeDefined();
   });
 });

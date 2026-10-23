@@ -119,7 +119,7 @@ function ApiKeys() {
       }
       wide
     >
-      <Heading>{t("API Keys")}</Heading>
+      <Heading>{t("API keys")}</Heading>
       <Text as="p" type="secondary">
         {showOfficialLinks ? (
           <Trans

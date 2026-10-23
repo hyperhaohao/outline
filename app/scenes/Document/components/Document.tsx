@@ -7,7 +7,7 @@ import { useTranslation } from "react-i18next";
 import { Prompt, matchPath, useHistory, useLocation } from "react-router-dom";
 import { toast } from "sonner";
 import styled from "styled-components";
-import breakpoint from "styled-components-breakpoint";
+import { breakpoint } from "@shared/styles/breakpoint";
 import { EditorStyleHelper } from "@shared/editor/styles/EditorStyleHelper";
 import { s } from "@shared/styles";
 import type { NavigationNode } from "@shared/types";
@@ -25,7 +25,6 @@ import LoadingIndicator from "~/components/LoadingIndicator";
 import PageTitle from "~/components/PageTitle";
 import PlaceholderDocument from "~/components/PlaceholderDocument";
 import RegisterKeyDown from "~/components/RegisterKeyDown";
-import { MeasuredContainer } from "~/components/MeasuredContainer";
 import type { Editor as TEditor } from "~/editor";
 import type { Properties } from "~/types";
 import useEventListener from "~/hooks/useEventListener";
@@ -372,8 +371,8 @@ function DocumentScene({
 
   const hasEmojiInTitle = determineIconType(document.icon) === IconType.Emoji;
   const pageTitle = hasEmojiInTitle
-    ? document.titleWithDefault.replace(document.icon!, "")
-    : document.titleWithDefault;
+    ? document.displayTitle.replace(document.icon!, "")
+    : document.displayTitle;
   const favicon = hasEmojiInTitle ? emojiToUrl(document.icon!) : undefined;
 
   const fullWidthTransformOffsetStyle = {
@@ -397,15 +396,7 @@ function DocumentScene({
         }}
         handler={onPublish}
       />
-      <MeasuredContainer
-        as={Background}
-        name="container"
-        column
-        auto
-        onDragOver={handleDragOver}
-        onDrop={handleDrop}
-        data-drop-area
-      >
+      <Background column auto onDragOver={handleDragOver} onDrop={handleDrop}>
         <PageTitle title={pageTitle} favicon={favicon} />
         {(isUploading || isSaving) && <LoadingIndicator />}
         <Container column auto>
@@ -449,9 +440,7 @@ function DocumentScene({
                 </EditorContainer>
               }
             >
-              <MeasuredContainer
-                name="document"
-                as={EditorContainer}
+              <EditorContainer
                 docFullWidth={document.fullWidth}
                 showContents={showContents}
                 tocPosition={tocPos}
@@ -502,7 +491,7 @@ function DocumentScene({
                     </Editor>
                   </>
                 )}
-              </MeasuredContainer>
+              </EditorContainer>
               {showContents && (
                 <ContentsContainer
                   docFullWidth={document.fullWidth}
@@ -515,7 +504,7 @@ function DocumentScene({
           </Main>
           {children}
         </Container>
-      </MeasuredContainer>
+      </Background>
     </ErrorBoundary>
   );
 }
@@ -598,7 +587,7 @@ const EditorContainer = styled.div<EditorContainerProps>`
 
   // A notice above the editor already provides the space from the header
   &:has(> ${DocumentNotice}) {
-    --document-title-margin-top: 0;
+    --document-title-margin-top: 0px;
   }
 
   ${breakpoint("tablet")`
@@ -624,6 +613,10 @@ const EditorContainer = styled.div<EditorContainerProps>`
 const Background = styled(Container)`
   position: relative;
   background: ${s("background")};
+
+  // A container unit, unlike a measured value, does not restyle the document on resize.
+  container-type: inline-size;
+  --container-width: 100cqi;
 `;
 
 const ReferencesWrapper = styled.div`

@@ -966,7 +966,7 @@ function WebsocketProvider({ children }: React.PropsWithChildren<object>) {
       }
       document.removeEventListener(getVisibilityListener(), checkConnection);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // oxlint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (

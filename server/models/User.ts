@@ -500,6 +500,10 @@ class User extends ParanoidModel<
         attributes: ["id"],
         where: {
           teamId: this.teamId,
+          // Only the owner can access a personal collection.
+          ownerId: {
+            [Op.or]: [{ [Op.is]: null }, { [Op.eq]: this.id }],
+          },
           [Op.or]: [
             ...(this.isGuest
               ? []
@@ -673,8 +677,9 @@ class User extends ParanoidModel<
     );
 
   /**
-   * Returns a temporary token that is only used for logging in from an email
-   * It can only be used to sign in once and has a medium length expiry
+   * Returns a temporary token that is only used for logging in from an email.
+   * It can only be used to sign in once, from the IP address that requested
+   * it, and expires after 10 minutes.
    *
    * @param ctx The request context, used to get the IP address of the request
    * @returns The email signin token

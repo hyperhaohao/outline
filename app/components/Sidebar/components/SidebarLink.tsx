@@ -1,7 +1,7 @@
 import type { LocationDescriptor } from "history";
 import * as React from "react";
 import styled, { useTheme, css } from "styled-components";
-import breakpoint from "styled-components-breakpoint";
+import { breakpoint } from "@shared/styles/breakpoint";
 import { ellipsis, hover, s } from "@shared/styles";
 import { isMobile } from "@shared/utils/browser";
 import { UnreadBadge } from "~/components/UnreadBadge";
@@ -31,6 +31,17 @@ export function indentForDepth(depth: number): number {
 }
 
 /**
+ * Returns the nesting depth of the children of a sidebar row. A row at depth 0
+ * shows an icon, so its children skip a level to start beyond the icon.
+ *
+ * @param depth The nesting depth of the row, 0-based.
+ * @returns the nesting depth of the children.
+ */
+export function childDepthFor(depth: number): number {
+  return depth === 0 ? 2 : depth + 1;
+}
+
+/**
  * Props for the SidebarLink component.
  * Extends NavLink props with additional sidebar-specific functionality.
  */
@@ -44,7 +55,7 @@ type Props = Omit<NavLinkProps, "to"> & {
   /** Callback fired when the link is clicked */
   onClick?: React.MouseEventHandler<HTMLAnchorElement>;
   /** Callback when we expect the user to click on the link. Used for prefetching data. */
-  onClickIntent?: React.MouseEventHandler<HTMLElement>;
+  onClickIntent?: () => void;
   /** Callback fired when the disclosure icon is clicked */
   onDisclosureClick?: React.MouseEventHandler<HTMLElement>;
   /** Icon to display on the left side of the link */
@@ -81,9 +92,8 @@ const activeDropStyle = {
   fontWeight: 600,
 };
 
-// Prevents the parent NavLink's mousedown handler from firing (which would
-// navigate or toggle), without calling preventDefault — that would block the
-// native HTML5 drag from initiating on the draggable row.
+// Prevents the parent NavLink's mousedown handler from firing, which would
+// navigate or toggle.
 const stopPropagation = (ev: React.MouseEvent) => {
   ev.stopPropagation();
 };
@@ -290,7 +300,14 @@ const Link = styled.a<{
     --background: ${s("sidebarActiveBackground")};
   }
 
-  ${(props) => props.$isActiveDrop && `--background: ${props.theme.slateDark};`}
+  ${(props) =>
+    props.$isActiveDrop &&
+    css`
+      &,
+      ${hoveredOrMenuOpen} {
+        --background: ${props.theme.slateDark};
+      }
+    `}
 
   display: flex;
   position: relative;

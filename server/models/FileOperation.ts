@@ -48,6 +48,8 @@ export type FileOperationOptions = {
   includeAttachments?: boolean;
   includePrivate?: boolean;
   permission?: CollectionPermission | null;
+  /** The owner of the personal collection that was exported, if any. */
+  personalOwnerId?: string;
 };
 
 type AdditionalFindOptions = {
@@ -88,9 +90,18 @@ type CreateExportOptions =
     {
       model: Document.unscoped(),
       as: "document",
-      attributes: ["id", "title"],
+      attributes: ["id", "title", "collectionId"],
       required: false,
       paranoid: false,
+      include: [
+        {
+          model: Collection.unscoped(),
+          as: "collection",
+          attributes: ["id", "ownerId"],
+          required: false,
+          paranoid: false,
+        },
+      ],
     },
   ],
 }))
@@ -170,17 +181,38 @@ class FileOperation extends ParanoidModel<
       ? await exportDocumentIds(resource)
       : [];
     await authorizeExportDocuments(user, exportedDocumentIds);
+    // The owner is stored on the export, as a document can move out of the
+    // personal collection after it was exported.
+    const sourceCollectionId =
+      "document" in options
+        ? options.document.collectionId
+        : options.collection?.id;
+    const sourceCollection = sourceCollectionId
+      ? await Collection.unscoped().findOne({
+          attributes: ["ownerId"],
+          where: { id: sourceCollectionId },
+          transaction: ctx.state.transaction,
+        })
+      : null;
+    const personalOwnerId = sourceCollection?.ownerId ?? undefined;
+
     const source =
       "document" in options
         ? {
-            name: options.document.titleWithDefault,
+            name: options.document.displayTitle,
             documentId: options.document.id,
             teamId: options.document.teamId,
+            options: personalOwnerId ? { personalOwnerId } : null,
           }
         : {
             name: options.collection?.name || options.team.name,
             collectionId: options.collection?.id,
             teamId: user.teamId,
+            options: {
+              includeAttachments: options.includeAttachments ?? true,
+              includePrivate: options.includePrivate ?? true,
+              ...(personalOwnerId ? { personalOwnerId } : {}),
+            },
           };
     const { name, ...attributes } = source;
     const key = this.getExportKey({
@@ -198,6 +230,7 @@ class FileOperation extends ParanoidModel<
       userId: user.id,
       ...attributes,
       options: {
+        ...(source.options ?? {}),
         ...("document" in options
           ? {}
           : {

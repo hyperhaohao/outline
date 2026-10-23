@@ -59,8 +59,7 @@ const CollectionLink: React.FC<Props> = ({
   const parentRef = React.useRef<HTMLDivElement>(null);
   const [{ isOver, canDrop }, dropRef] = useDropToChangeCollection(
     collection,
-    handleExpand,
-    parentRef
+    handleExpand
   );
 
   const handlePrefetch = React.useCallback(() => {
@@ -117,7 +116,7 @@ const CollectionLink: React.FC<Props> = ({
       onDisclosureClick={onDisclosureClick}
       onExpand={handleExpand}
       canEdit={can.update}
-      labelText={collection.name}
+      labelText={collection.displayName}
       onTitleChange={handleTitleChange}
       editableTitleRef={editableTitleRef}
       contextAction={contextMenuAction}

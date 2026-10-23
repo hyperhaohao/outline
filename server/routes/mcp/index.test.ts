@@ -103,6 +103,58 @@ describe("POST /mcp/", () => {
       expect(res.status).toEqual(404);
     });
 
+    it("should call a tool with a 2026-07-28 request", async () => {
+      const { user, accessToken } = await buildOAuthUser();
+      const collection = await buildCollection({
+        teamId: user.teamId,
+        userId: user.id,
+      });
+      const { body } = mcpRequest("tools/call", {
+        name: "list_collections",
+        arguments: {},
+        _meta: modernMeta("2026-07-28"),
+      });
+      const res = await server.post("/mcp/", {
+        headers: {
+          ...mcpHeaders(accessToken),
+          "MCP-Protocol-Version": "2026-07-28",
+          "Mcp-Method": "tools/call",
+          "Mcp-Name": "list_collections",
+        },
+        body,
+      });
+      expect(res.status).toEqual(200);
+      expect(res.headers.get("content-type")).toContain("application/json");
+
+      const parsed = await parseMcpResponse(res);
+      const result = parsed?.result as { content?: { text: string }[] };
+      expect(result?.content?.[0]?.text).toContain(collection.id);
+    });
+
+    it("should complete a subscriptions/listen request at once", async () => {
+      const { accessToken } = await buildOAuthUser();
+      const { body, resultId } = mcpRequest("subscriptions/listen", {
+        notifications: {
+          toolsListChanged: true,
+          resourcesListChanged: true,
+        },
+        _meta: modernMeta("2026-07-28"),
+      });
+      const res = await server.post("/mcp/", {
+        headers: {
+          ...mcpHeaders(accessToken),
+          "MCP-Protocol-Version": "2026-07-28",
+          "Mcp-Method": "subscriptions/listen",
+        },
+        body,
+      });
+      expect(res.status).toEqual(200);
+
+      const text = await res.text();
+      expect(text).toContain('"resultType":"complete"');
+      expect(text).toContain(`"id":${resultId}`);
+    });
+
     it("should handle initialize and return capabilities", async () => {
       const { accessToken } = await buildOAuthUser();
       const { body } = mcpRequest("initialize", {
@@ -181,6 +233,18 @@ describe("POST /mcp/", () => {
 
       await user.reload();
       expect(user.getFlag(UserFlag.MCP)).toEqual(1);
+    });
+
+    it("should reject tool arguments with too many elements", async () => {
+      const { accessToken } = await buildOAuthUser();
+
+      const res = await callMcpTool(server, accessToken, "list_collections", {
+        extra: Array.from({ length: 1001 }, (_, i) => i),
+      });
+      expect(res?.result?.isError).toBe(true);
+      expect(res?.result?.content?.[0]?.text).toContain(
+        "more than the maximum of 1000 elements"
+      );
     });
   });
 
@@ -383,7 +447,8 @@ describe("POST /mcp/", () => {
       const res = await callMcpTool(server, accessToken, "create_document", {
         title: "Should Fail",
       });
-      expect(res?.result?.isError).toBe(true);
+      expect(res?.result).toMatchObject({ isError: true });
+      expect(res?.result?.content?.[0]?.text).toContain("追踪编号");
     });
 
     it("read-only token does not have update_document tool", async () => {
@@ -402,7 +467,8 @@ describe("POST /mcp/", () => {
         id: document.id,
         title: "Should Fail",
       });
-      expect(res?.result?.isError).toBe(true);
+      expect(res?.result).toMatchObject({ isError: true });
+      expect(res?.result?.content?.[0]?.text).toContain("追踪编号");
     });
 
     it("read-only token does not have delete_comment tool", async () => {
@@ -424,7 +490,8 @@ describe("POST /mcp/", () => {
       const res = await callMcpTool(server, accessToken, "delete_comment", {
         id: comment.id,
       });
-      expect(res?.result?.isError).toBe(true);
+      expect(res?.result).toMatchObject({ isError: true });
+      expect(res?.result?.content?.[0]?.text).toContain("追踪编号");
     });
 
     it("create-scoped token can call create_document", async () => {
@@ -460,7 +527,8 @@ describe("POST /mcp/", () => {
         id: document.id,
         title: "Should Fail",
       });
-      expect(res?.result?.isError).toBe(true);
+      expect(res?.result).toMatchObject({ isError: true });
+      expect(res?.result?.content?.[0]?.text).toContain("追踪编号");
     });
 
     it("write-scoped token can call all operations", async () => {
@@ -506,3 +574,20 @@ describe("POST /mcp/", () => {
     });
   });
 });
+
+/**
+ * Builds the per-request `_meta` envelope of a 2026-07-28 request.
+ *
+ * @param protocolVersion - the protocol version to claim.
+ * @returns the envelope.
+ */
+function modernMeta(protocolVersion: string) {
+  return {
+    "io.modelcontextprotocol/protocolVersion": protocolVersion,
+    "io.modelcontextprotocol/clientInfo": {
+      name: "test-client",
+      version: "1.0.0",
+    },
+    "io.modelcontextprotocol/clientCapabilities": {},
+  };
+}

@@ -1,36 +1,37 @@
 import crypto from "node:crypto";
 import type { Context, Next } from "koa";
-import { contentSecurityPolicy } from "koa-helmet";
+import helmet from "koa-helmet";
 import { asyncNoop } from "es-toolkit";
 import { uniq } from "es-toolkit/compat";
 import env from "@server/env";
 
-const getBucketOrigin = () => {
+const getBucketOrigins = (): string[] => {
   if (env.AWS_S3_ACCELERATE_URL) {
-    return new URL(env.AWS_S3_ACCELERATE_URL).origin;
+    return [new URL(env.AWS_S3_ACCELERATE_URL).origin];
   }
 
   const url = env.AWS_S3_UPLOAD_BUCKET_URL || "";
   if (!url) {
-    return;
+    return [];
   }
 
   try {
     const parsedUrl = new URL(url);
+    const bucket = env.AWS_S3_UPLOAD_BUCKET_NAME;
+    const host =
+      bucket && parsedUrl.host.startsWith(`${bucket}.`)
+        ? parsedUrl.host.substring(bucket.length + 1) // +1 for the dot
+        : parsedUrl.host;
+    const origins = [`${parsedUrl.protocol}//${host}`];
 
-    if (
-      env.AWS_S3_UPLOAD_BUCKET_NAME &&
-      parsedUrl.hostname.startsWith(`${env.AWS_S3_UPLOAD_BUCKET_NAME}.`)
-    ) {
-      const hostnameWithoutBucket = parsedUrl.hostname.substring(
-        env.AWS_S3_UPLOAD_BUCKET_NAME.length + 1 // +1 for the dot
-      );
-      return `${parsedUrl.protocol}//${hostnameWithoutBucket}`;
+    // Without path-style the S3 client signs urls on the bucket subdomain.
+    if (bucket && !env.AWS_S3_FORCE_PATH_STYLE) {
+      origins.push(`${parsedUrl.protocol}//${bucket}.${host}`);
     }
 
-    return parsedUrl.origin;
+    return origins;
   } catch {
-    return;
+    return [];
   }
 };
 
@@ -94,8 +95,8 @@ export default function createCSPMiddleware(options?: CSPOptions) {
 
   // Allow to load assets from Vite
   if (!env.isProduction) {
-    scriptSrc.push(env.URL.replace(`:${env.PORT}`, ":3001"));
-    scriptSrc.push("localhost:3001");
+    scriptSrc.push(env.URL.replace(`:${env.PORT}`, `:${env.vitePort}`));
+    scriptSrc.push(`localhost:${env.vitePort}`);
   } else {
     scriptSrc.push(env.URL);
   }
@@ -111,10 +112,7 @@ export default function createCSPMiddleware(options?: CSPOptions) {
     defaultSrc.push(env.CDN_URL);
   }
 
-  const bucketOrigin = getBucketOrigin();
-  if (bucketOrigin) {
-    objectSrc.push(bucketOrigin);
-  }
+  objectSrc.push(...getBucketOrigins());
 
   const cloudFrontOrigin = getCloudFrontOrigin();
   if (cloudFrontOrigin) {
@@ -133,10 +131,8 @@ export default function createCSPMiddleware(options?: CSPOptions) {
       // allow additional sources for the response, see `allowScriptSrc` and
       // `allowStyleSrc`.
       if (!ctx.res.headersSent) {
-        // Note: workerSrc is included even though it's missing from the
-        // koa-helmet type definitions — the underlying helmet supports it. The
-        // service worker is served from the same origin as the document, which
-        // may be a custom domain that is not present in scriptSrc.
+        // The service worker is served from the same origin as the document,
+        // which may be a custom domain that is not present in scriptSrc.
         const directives = {
           baseUri: ["'none'"],
           defaultSrc,
@@ -164,7 +160,13 @@ export default function createCSPMiddleware(options?: CSPOptions) {
           connectSrc: ["*"],
         };
 
-        await contentSecurityPolicy({ directives })(ctx, asyncNoop);
+        // Helmet's default directives are not merged in, they include
+        // frame-ancestors and form-action restrictions that break embeds and
+        // OAuth redirects.
+        await helmet.contentSecurityPolicy({ useDefaults: false, directives })(
+          ctx,
+          asyncNoop
+        );
       }
     }
   };

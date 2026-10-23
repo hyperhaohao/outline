@@ -48,6 +48,13 @@ export async function authorizeExportOperation(
   if (user.isSuspended || user.teamId !== operation.teamId) {
     throw AuthorizationError();
   }
+  // 个人导出的历史快照始终属于原所有者，文档移到公共集合后也不能扩大下载范围。
+  if (
+    operation.options?.personalOwnerId &&
+    operation.options.personalOwnerId !== user.id
+  ) {
+    throw AuthorizationError();
+  }
   // 旧归档没有实际文档清单，当前目录不能证明已移走的历史正文仍可访问。
   // 非管理员可重新导出当前授权内容；待执行任务会在生成文件前建立清单。
   if (

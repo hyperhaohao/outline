@@ -129,8 +129,8 @@ function SharedWithMeLink({ membership, depth = 0 }: Props) {
   );
   const [{ isOverReparent }, dropToReparent] = useDropToReparentDocument(
     reparentableNode,
-    setExpanded,
-    parentRef
+    undefined,
+    setExpanded
   );
 
   const { icon } = useSidebarLabelAndIcon(membership);
@@ -183,7 +183,7 @@ function SharedWithMeLink({ membership, depth = 0 }: Props) {
   const label =
     determineIconType(docIcon) === IconType.Emoji
       ? document.title.replace(docIcon!, "")
-      : document.titleWithDefault;
+      : document.displayTitle;
   const collection = document.collectionId
     ? collections.get(document.collectionId)
     : undefined;
@@ -226,6 +226,14 @@ function SharedWithMeLink({ membership, depth = 0 }: Props) {
       parentRef={parentRef}
       dropToReparentRef={dropToReparent}
       isActiveDropTarget={isOverReparent}
+      cursorAfter={
+        reorderProps.isDragging ? (
+          <DropCursor
+            isActiveDrop={reorderProps.isOverCursor}
+            innerRef={dropToReorderRef}
+          />
+        ) : undefined
+      }
       menu={menu}
       menuOpen={menuOpen}
       isActiveOverride={isActive}
@@ -239,16 +247,13 @@ function SharedWithMeLink({ membership, depth = 0 }: Props) {
               parentId={document.id}
               collection={collection}
               membership={membership}
+              // Loads the document and its policies on hover, without which
+              // rows that were never opened cannot be dragged or dropped on.
+              prefetchDocument={documents.prefetchDocument}
             />
           </Folder>
         </SidebarExpansionContext.Provider>
       </SidebarDisclosureContext.Provider>
-      {reorderProps.isDragging && (
-        <DropCursor
-          isActiveDrop={reorderProps.isOverCursor}
-          innerRef={dropToReorderRef}
-        />
-      )}
     </DocumentRow>
   );
 }

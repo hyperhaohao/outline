@@ -94,6 +94,40 @@ describe("FileOperation", () => {
     });
   });
 
+  describe("个人导出归档", () => {
+    it("文档与集合导出同时保存个人所有者、清单及审计来源", async () => {
+      const team = await buildTeam();
+      const user = await buildUser({ teamId: team.id });
+      const collection = await buildCollection({
+        teamId: team.id,
+        userId: user.id,
+        ownerId: user.id,
+        permission: null,
+      });
+      const document = await buildDocument({
+        teamId: team.id,
+        userId: user.id,
+        collectionId: collection.id,
+      });
+      const ctx = createContext({ user });
+      ctx.state.credentialId = randomUUID();
+      const operations = await Promise.all([
+        FileOperation.createExport(ctx, {
+          document,
+          format: FileOperationFormat.MarkdownZip,
+        }),
+        FileOperation.createExport(ctx, { team, collection }),
+      ]);
+      for (const operation of operations) {
+        expect(operation.options).toMatchObject({
+          personalOwnerId: user.id,
+          exportedDocumentIds: [document.id],
+          audit: { credentialId: ctx.state.credentialId },
+        });
+      }
+    });
+  });
+
   describe("getExportKey", () => {
     it("should write to the uploads bucket", () => {
       const teamId = randomUUID();

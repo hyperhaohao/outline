@@ -1,4 +1,3 @@
-// oxlint-disable-next-line import/no-unresolved
 import "vite/modulepreload-polyfill";
 // Keep ahead of the other imports so polyfills apply before they evaluate.
 import "~/utils/polyfills";
@@ -22,7 +21,6 @@ import Toasts from "~/components/Toasts";
 import env from "~/env";
 import { initI18n } from "~/utils/i18n";
 import Desktop from "./components/DesktopEventHandler";
-import LazyPolyfill from "./components/LazyPolyfills";
 import PageScroll from "./components/PageScroll";
 import Routes from "./routes";
 import Logger from "./utils/Logger";
@@ -77,20 +75,18 @@ if (element) {
               <ActionContextProvider>
                 <ErrorBoundary showTitle>
                   <KBarProvider actions={[]} options={commandBarOptions}>
-                    <LazyPolyfill>
-                      <LazyMotion features={domMax}>
-                        <PageScroll>
-                          <PageTheme />
-                          <ScrollToTop>
-                            <Routes />
-                          </ScrollToTop>
-                          <Toasts />
-                          <Dialogs />
-                          <Presentation />
-                          <Desktop />
-                        </PageScroll>
-                      </LazyMotion>
-                    </LazyPolyfill>
+                    <LazyMotion features={domMax}>
+                      <PageScroll>
+                        <PageTheme />
+                        <ScrollToTop>
+                          <Routes />
+                        </ScrollToTop>
+                        <Toasts />
+                        <Dialogs />
+                        <Presentation />
+                        <Desktop />
+                      </PageScroll>
+                    </LazyMotion>
                   </KBarProvider>
                 </ErrorBoundary>
               </ActionContextProvider>

@@ -1,7 +1,7 @@
 # 基于已验证的官方运行镜像，替换前后端构建产物，保留相同锁定运行依赖。
-FROM outlinewiki/outline@sha256:898e4e94aeeb1e95a5d2a637dbcb51393cfd1e041d65381ab182cf2aade585fe
+FROM outlinewiki/outline@sha256:5d506854fed4940177e37cec1a28e9189dd26f404faafaa978a746038b6c2dfb
 ARG SOURCE_REVISION
-LABEL org.opencontainers.image.version="1.11.0-ruima.1" \
+LABEL org.opencontainers.image.version="1.12.0-ruima.1" \
       org.opencontainers.image.revision="${SOURCE_REVISION}" \
       org.opencontainers.image.title="Outline Ruima" \
       org.opencontainers.image.description="Unified export authorization, print protection, identity watermark and security auditing"

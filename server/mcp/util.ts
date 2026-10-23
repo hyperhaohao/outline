@@ -1,5 +1,4 @@
-import type { AuthInfo } from "@modelcontextprotocol/sdk/server/auth/types.js";
-import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import type { AuthInfo, CallToolResult } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import { auditToolResult } from "@server/security/mcpAudit";
 import type { AuditIdentity } from "@server/security/audit";
@@ -13,7 +12,7 @@ import { type APIContext, AuthenticationType } from "@server/types";
 import type { NavigationNode } from "@shared/types";
 
 interface McpContext {
-  authInfo?: AuthInfo;
+  http?: { authInfo?: AuthInfo };
 }
 
 /**
@@ -23,7 +22,7 @@ interface McpContext {
  * @returns the authenticated user.
  */
 export function getActorFromContext(context: McpContext) {
-  return context.authInfo?.extra?.user as User;
+  return context.http?.authInfo?.extra?.user as User;
 }
 
 /**
@@ -34,9 +33,9 @@ export function getActorFromContext(context: McpContext) {
  * @returns a partial APIContext suitable for command functions.
  */
 export function buildAPIContext(context: McpContext) {
-  const user = context.authInfo?.extra?.user as User;
-  const token = context.authInfo?.token ?? "";
-  const ip = context.authInfo?.extra?.ip as string | undefined;
+  const user = context.http?.authInfo?.extra?.user as User;
+  const token = context.http?.authInfo?.token ?? "";
+  const ip = context.http?.authInfo?.extra?.ip as string | undefined;
 
   const auth = {
     user,
@@ -141,7 +140,7 @@ export function withTracing<F extends (...args: any[]) => any>(
         "request.teamId": user.teamId,
       });
     }
-    const identity = context.authInfo?.extra?.auditIdentity as
+    const identity = context.http?.authInfo?.extra?.auditIdentity as
       | AuditIdentity
       | undefined;
     let result;

@@ -132,7 +132,7 @@ class UiStore {
     this.presentationData = document
       ? {
           documentId: document.id,
-          title: document.titleWithDefault,
+          title: document.displayTitle,
           icon: document.icon,
           color: document.color,
           data: document.data,

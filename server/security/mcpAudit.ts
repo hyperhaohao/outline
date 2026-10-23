@@ -1,4 +1,4 @@
-import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import type { CallToolResult } from "@modelcontextprotocol/server";
 import AuthenticationHelper from "@shared/helpers/AuthenticationHelper";
 import { recordAudit, type AuditIdentity } from "./audit";
 import { measureBodies, recordRead } from "./readRisk";
@@ -39,6 +39,14 @@ export function allowedTool(name: string, scopes: string[], resource?: string) {
       ? "allowed"
       : "credential_scope";
   }
+  // 历史差异工具同时读取修订目录与正文，两个作用域缺一不可。
+  if (name === "get_document_changes") {
+    return ["revisions.list", "revisions.info"].every((method) =>
+      AuthenticationHelper.canAccess(method, scopes)
+    )
+      ? "allowed"
+      : "credential_scope";
+  }
   const method = Object.hasOwn(toolScopes, name) ? toolScopes[name] : undefined;
   return !method
     ? "unknown_tool"
@@ -58,6 +66,10 @@ export async function auditToolResult(
     args && typeof args === "object" ? (args as Record<string, unknown>) : {};
   const targets: string[] = [];
   let bytes = 0;
+  // 差异是明文返回的历史正文，同样计入用户级跨凭据读取风险。
+  if (name === "get_document_changes" && typeof input.id === "string") {
+    targets.push(input.id);
+  }
   for (const block of result.content) {
     if (block.type !== "text") {
       continue;
@@ -76,8 +88,9 @@ export async function auditToolResult(
       }
     } catch {
       if (
-        name === "fetch" &&
-        (input.resource === "document" || input.resource === "template")
+        name === "get_document_changes" ||
+        (name === "fetch" &&
+          (input.resource === "document" || input.resource === "template"))
       ) {
         bytes += Buffer.byteLength(block.text);
       }

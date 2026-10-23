@@ -9,6 +9,7 @@ import {
   PlusIcon,
   PrintIcon,
   PublishIcon,
+  SettingsIcon,
   TrashIcon,
 } from "outline-icons";
 import { Trans } from "react-i18next";
@@ -52,6 +53,16 @@ export const createTemplate = createInternalLinkAction({
   to: newTemplatePath(),
 });
 
+export const manageTemplates = createInternalLinkAction({
+  name: ({ t }) => t("Manage templates"),
+  analyticsName: "Manage templates",
+  section: TemplateSection,
+  icon: <SettingsIcon />,
+  visible: ({ currentTeamId, stores }) =>
+    !!stores.policies.abilities(currentTeamId!).readTemplate,
+  to: settingsPath("templates"),
+});
+
 export const deleteTemplate = dialogActionFactory({
   analyticsName: "Delete template",
   section: ActiveTemplateSection,
@@ -84,7 +95,7 @@ export const deleteTemplate = dialogActionFactory({
           <Trans
             defaults="Are you sure about that? Deleting the <em>{{ templateName }}</em> template is permanent."
             values={{
-              templateName: templates[0].titleWithDefault,
+              templateName: templates[0].displayTitle,
             }}
             components={{
               em: <strong />,
