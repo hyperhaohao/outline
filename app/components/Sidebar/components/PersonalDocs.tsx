@@ -1,4 +1,3 @@
-import styled from "styled-components";
 import { observer } from "mobx-react";
 import { DocumentIcon, PlusIcon } from "outline-icons";
 import { useCallback, useMemo, useRef } from "react";
@@ -155,10 +154,7 @@ export const PersonalDocs = observer(function PersonalDocs() {
   return (
     <SidebarContext.Provider value="personal">
       <ActionContextProvider value={{ activeModels }}>
-        <Flex
-          column
-          title="个人资料默认仅本人及工作区管理员可查阅；显式分享以实际授权为准"
-        >
+        <Flex column>
           <Header
             id="personal"
             title={t("Personal")}
@@ -166,7 +162,6 @@ export const PersonalDocs = observer(function PersonalDocs() {
             primaryAction={canCreate ? newDocAction : undefined}
           >
             <Relative>
-              <VisibilityHint>本人及工作区管理员可查阅</VisibilityHint>
               {collection ? (
                 <CollectionLinkChildren
                   collection={collection}
@@ -187,9 +182,3 @@ export const PersonalDocs = observer(function PersonalDocs() {
     </SidebarContext.Provider>
   );
 });
-
-const VisibilityHint = styled.small`
-  display: block;
-  padding: 4px 12px;
-  opacity: 0.7;
-`;
