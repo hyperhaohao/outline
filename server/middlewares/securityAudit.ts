@@ -77,7 +77,10 @@ export default function securityAudit() {
             true
           );
         }
-      } else if (identity.channel === "api") {
+      } else if (
+        identity.channel === "api" ||
+        (identity.channel === "web" && identity.user.isAdmin)
+      ) {
         const measurement = measureBodies(ctx.body);
         if (measurement.ids.length) {
           await recordRead(

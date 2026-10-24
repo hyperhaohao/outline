@@ -116,6 +116,12 @@ async function presentDocument(
       res.ownerId = null;
     } else if (document.collection !== undefined) {
       res.ownerId = document.collection?.ownerId ?? null;
+      if (document.collection?.ownerId) {
+        const owner = await User.findByPk(document.collection.ownerId, {
+          attributes: ["id", "name"],
+        });
+        res.personalOwnerName = owner?.name;
+      }
     }
     res.parentDocumentId = document.parentDocumentId;
     res.createdBy = presentUser(document.createdBy);

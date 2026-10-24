@@ -796,6 +796,15 @@ export default class PostgresSearchProvider extends BaseSearchProvider {
         Document.membershipDocumentIds(model.id),
         model.collectionIds(),
       ]);
+      if (model.isAdmin) {
+        const personal = await Collection.findAll({
+          attributes: ["id"],
+          where: { teamId: model.teamId, ownerId: { [Op.ne]: null } },
+        });
+        if (personal.length) {
+          where[Op.or].push({ collectionId: personal.map((c) => c.id) });
+        }
+      }
       if (membershipDocumentIds.length) {
         where[Op.or].push({ id: membershipDocumentIds });
       }

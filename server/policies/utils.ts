@@ -116,8 +116,9 @@ export function isCollectionWritable(
   collection: Collection | null | undefined
 ): boolean {
   return (
-    !collection?.ownerId ||
-    !!actor.team?.getPreference(TeamPreference.PersonalDocs)
+    !isPersonalSupervisor(actor, collection) &&
+    (!collection?.ownerId ||
+      !!actor.team?.getPreference(TeamPreference.PersonalDocs))
   );
 }
 
@@ -214,4 +215,16 @@ export function isGroupAdmin(actor: User, model: Group | null): boolean {
   }
 
   return false;
+}
+
+/** 判断是否仅凭管理员身份监管他人个人区域；此身份不得用于写入或导出。 */
+export function isPersonalSupervisor(
+  actor: User,
+  collection: Collection | null | undefined
+): boolean {
+  return (
+    !!collection?.ownerId &&
+    collection.ownerId !== actor.id &&
+    isTeamAdmin(actor, collection)
+  );
 }

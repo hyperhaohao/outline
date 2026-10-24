@@ -229,6 +229,7 @@ const collectionListFilter = createFilterSchema({
   updatedAt: "date",
   archivedAt: "date",
   createdById: "uuid",
+  ownerId: "uuid",
   permission: {
     kind: "string",
     operators: ["eq", "neq", "in", "notIn", "isNull", "isNotNull"],

@@ -21,6 +21,7 @@ export interface AuditOperation {
   operation: string;
   result: "attempt" | "allowed" | "denied" | "complete" | "queued" | "failed";
   targetIds?: string[];
+  personalOwnerIds?: string[];
   reason?: string;
   riskType?: string;
   documentCount?: number;
@@ -86,6 +87,7 @@ export async function recordAudit(
           operation: operation.operation,
           result: operation.result,
           targetIds: operation.targetIds?.slice(0, 1000),
+          personalOwnerIds: operation.personalOwnerIds?.slice(0, 1000),
           reason: operation.reason,
           riskType: operation.riskType,
           documentCount: operation.documentCount ?? 0,

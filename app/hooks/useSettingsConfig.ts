@@ -45,6 +45,9 @@ const Notifications = lazy(() => import("~/scenes/Settings/Notifications"));
 const Preferences = lazy(() => import("~/scenes/Settings/Preferences"));
 const Profile = lazy(() => import("~/scenes/Settings/Profile"));
 const Security = lazy(() => import("~/scenes/Settings/Security"));
+const PersonalAreas = lazy(() => import("~/scenes/Settings/PersonalAreas"), {
+  exportName: "PersonalAreas",
+});
 const RiskAudit = lazy(() => import("~/scenes/Settings/RiskAudit"));
 const Shares = lazy(() => import("~/scenes/Settings/Shares"));
 const Templates = lazy(() => import("~/scenes/Settings/Templates"));
@@ -80,6 +83,15 @@ const useSettingsConfig = () => {
 
   const config = useComputed(() => {
     const items: ConfigItem[] = [
+      {
+        name: "个人区域管理",
+        path: settingsPath("personal-areas"),
+        component: PersonalAreas.Component,
+        preload: PersonalAreas.preload,
+        enabled: user.isAdmin,
+        group: t("Workspace"),
+        icon: UserIcon,
+      },
       {
         name: "风险审计",
         path: settingsPath("risk-audit"),

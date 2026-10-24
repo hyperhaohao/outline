@@ -2707,7 +2707,7 @@ describe("#collections.restore", () => {
 });
 
 describe("personal collections", () => {
-  it("should not list the personal collection of another user", async () => {
+  it("should let admins list personal collections without changing owner visibility", async () => {
     const team = await buildTeam();
     const owner = await buildUser({ teamId: team.id });
     const admin = await buildAdmin({ teamId: team.id });
@@ -2719,7 +2719,7 @@ describe("personal collections", () => {
       const json = await res.json();
       expect(res.status).toEqual(200);
       const ids = json.data.map((c: { id: string }) => c.id);
-      expect(ids).not.toContain(personal.id);
+      expect(ids).toContain(personal.id);
       expect(ids).toContain(own.id);
     }
 
@@ -2728,7 +2728,7 @@ describe("personal collections", () => {
     expect(json.data.map((c: { id: string }) => c.id)).toEqual([personal.id]);
   });
 
-  it("should not return the personal collection of another user", async () => {
+  it("should let admins read personal collection metadata but deny management", async () => {
     const team = await buildTeam();
     const owner = await buildUser({ teamId: team.id });
     const admin = await buildAdmin({ teamId: team.id });
@@ -2746,7 +2746,16 @@ describe("personal collections", () => {
       const res = await server.post(`/api/${route}`, admin, {
         body: { id: personal.id },
       });
-      expect({ route, status: res.status }).toEqual({ route, status: 403 });
+      expect({ route, status: res.status }).toEqual({
+        route,
+        status: [
+          "collections.info",
+          "collections.memberships",
+          "collections.group_memberships",
+        ].includes(route)
+          ? 200
+          : 403,
+      });
     }
   });
 
@@ -2833,6 +2842,7 @@ describe("personal collection lists", () => {
    */
   const readableIds = (key: UserKey) => {
     switch (key) {
+      case "admin":
       case "owner":
         return [collectionId, rootId, nestedId];
       case "collaborator":

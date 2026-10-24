@@ -224,6 +224,9 @@ const DocumentMeta: React.FC<Props> = ({
       ) : (
         content
       )}
+      {document.ownerId && document.personalOwnerName && (
+        <span> · 个人区域：{document.personalOwnerName}</span>
+      )}
       {showCollection && collection && (
         <span>
           &nbsp;{t("in")}&nbsp;

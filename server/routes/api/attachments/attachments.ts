@@ -1,4 +1,6 @@
 import Router from "@koa/router";
+import { authorizePersonalAttachment } from "@server/security/personalAccess";
+import { identityFromContext } from "@server/security/audit";
 import type { WhereOptions } from "sequelize";
 import { randomUUID } from "node:crypto";
 import { AttachmentPreset } from "@shared/types";
@@ -311,6 +313,7 @@ const handleAttachmentsRedirect = async (
     rejectOnEmpty: true,
   });
 
+  // 普通附件继续遵循工作区规则；个人文档附件在签名前另行核对文档权限。
   // Private attachments are accessible to any member of the workspace they
   // belong to. This is intentional and not a permission bypass – attachments
   // are owned by the workspace (team), not by individual documents. Checking
@@ -319,6 +322,8 @@ const handleAttachmentsRedirect = async (
   if (attachment.isPrivate && attachment.teamId !== user?.teamId) {
     throw AuthorizationError();
   }
+
+  await authorizePersonalAttachment(user, attachment, identityFromContext(ctx));
 
   await attachment.update(
     {

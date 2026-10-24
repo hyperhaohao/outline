@@ -1,3 +1,4 @@
+import { auditPersonalCollection } from "@server/security/personalAccess";
 import { Hour } from "@shared/utils/time";
 import type Collection from "@server/models/Collection";
 import { DocumentHelper } from "@server/models/helpers/DocumentHelper";
@@ -22,6 +23,7 @@ export default async function presentCollection(
   collection: Collection,
   options: Options = {}
 ) {
+  await auditPersonalCollection(ctx, collection);
   const asData = !ctx || Number(ctx?.headers["x-api-version"] ?? 0) >= 3;
 
   const res: Record<string, unknown> = {

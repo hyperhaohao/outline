@@ -1,4 +1,5 @@
 import Router from "@koa/router";
+import { auditPersonalCollection } from "@server/security/personalAccess";
 import { authorizeExport } from "@server/security/exportAuthorization";
 import { identityFromContext, recordAudit } from "@server/security/audit";
 import { randomUUID } from "node:crypto";
@@ -180,6 +181,7 @@ router.post(
 
     authorize(user, "readDocument", collection);
 
+    await auditPersonalCollection(ctx, collection);
     const documentStructure = await collection.getCachedDocumentStructure();
 
     ctx.body = {
@@ -819,10 +821,6 @@ router.post(
     // are not a member of, so they must be able to see them listed.
     if (!user.isAdmin || !(includeListOnly || includeArchived)) {
       where[Op.and].push({ id: collectionIds });
-    } else {
-      where[Op.and].push({
-        ownerId: { [Op.or]: [{ [Op.is]: null }, { [Op.eq]: user.id }] },
-      });
     }
 
     if (filter) {

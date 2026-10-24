@@ -6,6 +6,7 @@ import {
   and,
   isCollectionOwner,
   isCollectionWritable,
+  isPersonalSupervisor,
   isTeamAdmin,
   isTeamModel,
   isTeamMutable,
@@ -33,7 +34,6 @@ allow(User, "importCollection", Team, (actor, team) =>
 allow(User, "createPersonalCollection", Team, (actor, team) =>
   and(
     !actor.isGuest,
-    !actor.isViewer,
     isTeamModel(actor, team),
     isTeamMutable(actor),
     !!team?.getPreference(TeamPreference.PersonalDocs)
@@ -54,7 +54,7 @@ allow(User, "read", Collection, (user, collection) => {
     return false;
   }
   if (collection.isPersonal) {
-    return isCollectionOwner(user, collection);
+    return isCollectionOwner(user, collection) || isTeamAdmin(user, collection);
   }
   if (user.isAdmin) {
     return true;
@@ -79,6 +79,7 @@ allow(User, "duplicate", Collection, (actor, collection) =>
 allow(User, "download", Collection, (actor, collection) =>
   and(
     can(actor, "read", collection),
+    !isPersonalSupervisor(actor, collection),
     or(
       and(!actor.isGuest, !actor.isViewer),
       !!actor.team.getPreference(TeamPreference.ViewersCanExport)
@@ -105,7 +106,9 @@ allow(
     }
 
     if (collection.isPersonal) {
-      return isCollectionOwner(user, collection);
+      return (
+        isCollectionOwner(user, collection) || isTeamAdmin(user, collection)
+      );
     }
 
     if (collection.isPrivate || user.isGuest) {

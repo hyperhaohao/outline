@@ -1,3 +1,5 @@
+import { Op } from "sequelize";
+import { Document, Collection } from "@server/models";
 import { randomUUID } from "node:crypto";
 import RedisAdapter from "@server/storage/redis";
 import Logger from "@server/logging/Logger";
@@ -46,13 +48,52 @@ export async function recordRead(
   bytes: number
 ) {
   const targetIds = [...new Set(ids)];
-  const saved = await recordAudit(identity, {
-    operation,
-    result: "complete",
-    targetIds,
-    documentCount: targetIds.length,
-    returnedBytes: bytes,
-  });
+  const personalDocuments =
+    identity.user.isAdmin && targetIds.length
+      ? await Document.scope("withDrafts").findAll({
+          attributes: ["id"],
+          paranoid: false,
+          where: {
+            id: targetIds.filter((id) =>
+              /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+                id
+              )
+            ),
+            teamId: identity.user.teamId,
+          },
+          include: [
+            {
+              model: Collection,
+              as: "collection",
+              attributes: ["ownerId"],
+              paranoid: false,
+              where: {
+                teamId: identity.user.teamId,
+                ownerId: { [Op.ne]: null, [Op.not]: identity.user.id },
+              },
+            },
+          ],
+        })
+      : [];
+  const personalOwnerIds = [
+    ...new Set(
+      personalDocuments
+        .map((d) => d.collection?.ownerId)
+        .filter((id): id is string => !!id)
+    ),
+  ];
+  const saved = await recordAudit(
+    identity,
+    {
+      operation,
+      result: "complete",
+      targetIds,
+      documentCount: targetIds.length,
+      returnedBytes: bytes,
+      personalOwnerIds,
+    },
+    personalOwnerIds.length > 0
+  );
   if (!saved || (!bytes && !targetIds.length)) {
     return;
   }
@@ -108,7 +149,9 @@ export function measureBodies(value: unknown): {
         (typeof record.text === "string" ||
           (record.data && typeof record.data === "object"))
       ) {
-        ids.add(record.id);
+        ids.add(
+          typeof record.documentId === "string" ? record.documentId : record.id
+        );
         bytes += Buffer.byteLength(
           typeof record.text === "string"
             ? record.text

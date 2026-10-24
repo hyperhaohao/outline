@@ -857,13 +857,23 @@ describe("personal collection", () => {
     expect(abilities.pinToHome).toEqual(false);
   });
 
-  it("should allow nothing for a workspace admin", async () => {
+  it("should allow read-only supervision for a workspace admin", async () => {
     const { team, doc } = await buildPersonal();
     const admin = await buildAdmin({ teamId: team.id });
     const document = await Document.findByPk(doc.id, { userId: admin.id });
     const abilities = serialize(admin, document);
     for (const [ability, value] of Object.entries(abilities)) {
-      expect({ ability, value }).toEqual({ ability, value: false });
+      expect(!!value).toBe(
+        [
+          "read",
+          "listRevisions",
+          "listViews",
+          "star",
+          "unstar",
+          "subscribe",
+          "unsubscribe",
+        ].includes(ability)
+      );
     }
   });
 

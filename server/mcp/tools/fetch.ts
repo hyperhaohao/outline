@@ -1,3 +1,4 @@
+import { authorizePersonalAttachment } from "@server/security/personalAccess";
 import { z } from "zod";
 import type { McpServer, CallToolResult } from "@modelcontextprotocol/server";
 import {
@@ -209,6 +210,7 @@ export function fetchTool(server: McpServer, scopes: string[]) {
               rejectOnEmpty: true,
             });
 
+            // 普通附件继续遵循工作区规则；个人文档附件在签名前另行核对文档权限。
             // Private attachments are accessible to any member of the workspace they
             // belong to. This is intentional and not a permission bypass – attachments
             // are owned by the workspace (team), not by individual documents or users.
@@ -216,6 +218,7 @@ export function fetchTool(server: McpServer, scopes: string[]) {
               throw AuthorizationError();
             }
 
+            await authorizePersonalAttachment(actor, attachment);
             return success({
               id: attachment.id,
               name: attachment.name,

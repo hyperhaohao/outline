@@ -37,6 +37,7 @@ import env from "@server/env";
 import {
   InvalidRequestError,
   AuthenticationError,
+  AuthorizationError,
   ValidationError,
   IncorrectEditionError,
   NotFoundError,
@@ -193,7 +194,14 @@ async function directMembershipDocumentIds(user: User): Promise<string[]> {
  * @returns an array of OR-able Sequelize conditions.
  */
 async function draftVisibilityClauses(user: User): Promise<WhereOptions[]> {
+  const personal = user.isAdmin
+    ? await Collection.findAll({
+        attributes: ["id"],
+        where: { teamId: user.teamId, ownerId: { [Op.ne]: null } },
+      })
+    : [];
   return [
+    ...(personal.length ? [{ collectionId: personal.map((c) => c.id) }] : []),
     { createdById: user.id },
     { id: await directMembershipDocumentIds(user) },
   ];
@@ -1177,7 +1185,7 @@ router.post(
 
 router.post(
   "documents.restore",
-  auth({ role: UserRole.Member }),
+  auth(),
   rateLimiter(RateLimiterStrategy.OneHundredPerMinute),
   validate(T.DocumentsRestoreSchema),
   transaction(),
@@ -1190,6 +1198,9 @@ router.post(
       paranoid: false,
       transaction,
     });
+    if (user.isViewer && document?.collection?.ownerId !== user.id) {
+      throw AuthorizationError();
+    }
     authorize(user, "read", document);
 
     await documentRestorer(ctx, { document, collectionId, revisionId });
@@ -2311,6 +2322,7 @@ router.post(
 
     const collectionIds = await user.collectionIds({
       paranoid: false,
+      writableOnly: true,
     });
     const documents = await Document.scope("withDrafts").findAll({
       attributes: ["id"],

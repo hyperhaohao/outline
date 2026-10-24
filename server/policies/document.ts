@@ -10,6 +10,7 @@ import {
   and,
   isCollectionOwner,
   isCollectionWritable,
+  isPersonalSupervisor,
   isCommentingEnabled,
   isTeamAdmin,
   isTeamModel,
@@ -51,6 +52,7 @@ allow(User, ["listRevisions", "listViews"], Document, (actor, document) =>
 
 allow(User, "download", Document, (actor, document) =>
   and(
+    !isPersonalSupervisor(actor, document?.collection),
     can(actor, "read", document),
     or(
       and(!actor.isGuest, !actor.isViewer),
@@ -63,6 +65,7 @@ allow(User, "comment", Document, (actor, document) => {
   const commenting = actor.team.getPreference(TeamPreference.Commenting);
   return and(
     !!document?.isActive,
+    !isPersonalSupervisor(actor, document?.collection),
     isTeamMutable(actor),
     can(actor, "read", document),
     isCommentingEnabled(actor),
@@ -84,6 +87,7 @@ allow(
 
 allow(User, "share", Document, (actor, document) =>
   and(
+    !isPersonalSupervisor(actor, document?.collection),
     !!document?.isActive,
     isTeamMutable(actor),
     can(actor, "read", document),
@@ -120,6 +124,7 @@ allow(User, "publish", Document, (actor, document) =>
 
 allow(User, "manageUsers", Document, (actor, document) =>
   and(
+    !isPersonalSupervisor(actor, document?.collection),
     isTeamMutable(actor),
     can(actor, "read", document),
     or(
@@ -135,6 +140,7 @@ allow(User, "manageUsers", Document, (actor, document) =>
 // collection is chosen separately and authorized at that point.
 allow(User, "duplicate", Document, (actor, document) =>
   and(
+    !isPersonalSupervisor(actor, document?.collection),
     !!document?.isActive,
     isTeamMutable(actor),
     can(actor, "read", document),
@@ -212,7 +218,7 @@ allow(User, "delete", Document, (actor, document) =>
 allow(User, "restore", Document, (actor, document) =>
   and(
     !actor.isGuest,
-    !actor.isViewer,
+    or(!actor.isViewer, isPersonalOwner(actor, document)),
     !!document?.isDeleted,
     isTeamModel(actor, document),
     or(
@@ -260,7 +266,7 @@ allow(User, "archive", Document, (actor, document) =>
 allow(User, "unarchive", Document, (actor, document) =>
   and(
     !actor.isGuest,
-    !actor.isViewer,
+    or(!actor.isViewer, isPersonalOwner(actor, document)),
     !document?.isDraft,
     !document?.isDeleted,
     !!document?.archivedAt,

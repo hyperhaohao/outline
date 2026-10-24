@@ -141,6 +141,10 @@ export default class Document extends ArchivableModel implements Searchable {
   @observable
   ownerId?: string | null;
 
+  /** 原生个人文档所有者的显示名，仅在资源授权后返回。 */
+  @observable
+  personalOwnerName?: string;
+
   /**
    * The title of the document.
    */

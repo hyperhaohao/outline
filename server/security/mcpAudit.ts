@@ -1,3 +1,4 @@
+import { Attachment, Collection } from "@server/models";
 import type { CallToolResult } from "@modelcontextprotocol/server";
 import AuthenticationHelper from "@shared/helpers/AuthenticationHelper";
 import { recordAudit, type AuditIdentity } from "./audit";
@@ -76,13 +77,38 @@ export async function auditToolResult(
     }
     try {
       const parsed: unknown = JSON.parse(block.text);
+      if (
+        ["list_collections", "list_collection_documents"].includes(name) &&
+        parsed &&
+        typeof parsed === "object" &&
+        "id" in parsed &&
+        typeof parsed.id === "string"
+      ) {
+        targets.push(parsed.id);
+      }
+      if (
+        name === "list_collection_documents" &&
+        typeof input.collectionId === "string"
+      ) {
+        targets.push(input.collectionId);
+      }
       const measured = measureBodies(parsed);
       targets.push(...measured.ids);
       bytes += measured.bytes;
-      if (name === "fetch" && parsed && typeof parsed === "object") {
+      if (
+        ["fetch", "get_document_changes"].includes(name) &&
+        parsed &&
+        typeof parsed === "object"
+      ) {
         const item = parsed as { id?: unknown; document?: { id?: unknown } };
         const id = item.document?.id ?? item.id;
         if (typeof id === "string") {
+          if (name === "get_document_changes") {
+            const previous = targets.indexOf(String(input.id));
+            if (previous >= 0) {
+              targets.splice(previous, 1);
+            }
+          }
           targets.push(id);
         }
       }
@@ -93,6 +119,45 @@ export async function auditToolResult(
           (input.resource === "document" || input.resource === "template"))
       ) {
         bytes += Buffer.byteLength(block.text);
+      }
+    }
+  }
+  if (!result.isError && identity.user.isAdmin && targets.length) {
+    const personal = await Collection.findAll({
+      where: {
+        id: targets.filter((id) =>
+          /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+            id
+          )
+        ),
+        teamId: identity.user.teamId,
+      },
+      attributes: ["id", "ownerId"],
+    });
+    const ownerIds = personal
+      .map((c) => c.ownerId)
+      .filter((id): id is string => !!id && id !== identity.user.id);
+    if (ownerIds.length) {
+      await recordAudit(
+        identity,
+        {
+          operation: "personal.collection.read",
+          result: "complete",
+          targetIds: personal.map((c) => c.id),
+          personalOwnerIds: ownerIds,
+        },
+        true
+      );
+    }
+    if (name === "fetch" && input.resource === "attachment") {
+      const attachment = await Attachment.findByPk(targets[0]);
+      if (attachment?.documentId) {
+        await recordRead(
+          identity,
+          "personal.attachment.read",
+          [attachment.documentId],
+          0
+        );
       }
     }
   }

@@ -585,6 +585,7 @@ export type DocumentsImportReq = z.infer<typeof DocumentsImportSchema>;
 
 export const DocumentsCreateSchema = BaseSchema.extend({
   body: z.object({
+    ownerId: z.never().optional(),
     /** Id of the document to be created */
     id: zodIdType().optional(),
 

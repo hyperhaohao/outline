@@ -644,7 +644,7 @@ describe("personal collection", () => {
     expect(abilities.move).toEqual(false);
   });
 
-  it("should allow nothing for a workspace admin", async () => {
+  it("should allow read-only supervision for a workspace admin", async () => {
     const { team, collection } = await buildPersonal();
     const admin = await buildAdmin({ teamId: team.id });
     const reloaded = await Collection.findByPk(collection.id, {
@@ -652,11 +652,13 @@ describe("personal collection", () => {
     });
     const abilities = serialize(admin, reloaded);
     for (const [ability, value] of Object.entries(abilities)) {
-      expect({ ability, value }).toEqual({ ability, value: false });
+      expect(!!value).toBe(
+        ["read", "readDocument", "subscribe", "unsubscribe"].includes(ability)
+      );
     }
   });
 
-  it("should allow nothing for a workspace admin with a membership", async () => {
+  it("should allow read-only supervision for a workspace admin with a membership", async () => {
     const { team, owner, collection } = await buildPersonal();
     const admin = await buildAdmin({ teamId: team.id });
     await UserMembership.create({
@@ -670,7 +672,9 @@ describe("personal collection", () => {
     });
     const abilities = serialize(admin, reloaded);
     for (const [ability, value] of Object.entries(abilities)) {
-      expect({ ability, value }).toEqual({ ability, value: false });
+      expect(!!value).toBe(
+        ["read", "readDocument", "subscribe", "unsubscribe"].includes(ability)
+      );
     }
   });
 
@@ -723,7 +727,7 @@ describe("personal collection", () => {
     const viewer = await buildUser({ teamId: team.id, role: UserRole.Viewer });
     const guest = await buildUser({ teamId: team.id, role: UserRole.Guest });
     expect(serialize(member, team).createPersonalCollection).toBeTruthy();
-    expect(serialize(viewer, team).createPersonalCollection).toEqual(false);
+    expect(serialize(viewer, team).createPersonalCollection).toBeTruthy();
     expect(serialize(guest, team).createPersonalCollection).toEqual(false);
 
     team.setPreference(TeamPreference.PersonalDocs, false);

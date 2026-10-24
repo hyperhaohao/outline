@@ -19,3 +19,6 @@
 !server/mcp/
 !server/mcp/skills/
 !server/mcp/skills/**
+
+!customization/
+!customization/legacy-personal-spaces.cjs

@@ -119,7 +119,11 @@ router.post(
       includeContent: false,
       includeViews: false,
     });
-    authorize(user, "read", document);
+    authorize(
+      user,
+      document?.collection?.isPersonal ? "update" : "read",
+      document
+    );
     authorize(user, "delete", revision);
 
     await revision.destroyWithCtx(ctx);

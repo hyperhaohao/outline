@@ -487,9 +487,12 @@ class User extends ParanoidModel<
    * @returns An array of collection ids
    */
   public collectionIds = async (
-    options: FindOptions<Collection> & { skipCache?: boolean } = {}
+    options: FindOptions<Collection> & {
+      skipCache?: boolean;
+      writableOnly?: boolean;
+    } = {}
   ) => {
-    const { skipCache, ...findOptions } = options;
+    const { skipCache, writableOnly, ...findOptions } = options;
     const hasOptions =
       findOptions.transaction ||
       findOptions.paranoid === false ||
@@ -500,11 +503,16 @@ class User extends ParanoidModel<
         attributes: ["id"],
         where: {
           teamId: this.teamId,
-          // Only the owner can access a personal collection.
-          ownerId: {
-            [Op.or]: [{ [Op.is]: null }, { [Op.eq]: this.id }],
-          },
+          // 本人可读写；管理员仅在读取查询中包含他人个人集合。
+          ...(this.isAdmin && !writableOnly
+            ? {}
+            : {
+                ownerId: { [Op.or]: [{ [Op.is]: null }, { [Op.eq]: this.id }] },
+              }),
           [Op.or]: [
+            ...(this.isAdmin && !writableOnly
+              ? [{ ownerId: { [Op.ne]: null } }]
+              : []),
             ...(this.isGuest
               ? []
               : [
@@ -561,7 +569,7 @@ class User extends ParanoidModel<
       return Array.from(new Set(collectionStubs.map((c) => c.id)));
     };
 
-    if (hasOptions || skipCache) {
+    if (hasOptions || skipCache || this.isAdmin || writableOnly) {
       return fetchCollectionIds();
     }
 
