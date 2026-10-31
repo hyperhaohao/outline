@@ -4,6 +4,7 @@ import { action, computed, observable } from "mobx";
 export interface WatermarkIdentity {
   name: string;
   account: string;
+  dingTalkUnionId?: string;
   traceId?: string;
 }
 

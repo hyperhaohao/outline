@@ -18,6 +18,7 @@ import { sequelize } from "@server/storage/database";
 import type { APIContext } from "@server/types";
 import { UserFlag } from "@server/models/User";
 import UploadUserAvatarTask from "@server/queues/tasks/UploadUserAvatarTask";
+import type { DingTalkIdentity } from "@server/security/dingTalkIdentity";
 
 type UserProvisionerResult = {
   user: User;
@@ -53,6 +54,8 @@ type Props = {
     authenticationProviderId: string;
     /** External identifier of the user in the authentication provider  */
     providerId: string | number;
+    /** 已验证的身份元数据；undefined表示本次提供方不维护此字段。 */
+    identityMetadata?: { dingTalk: DingTalkIdentity | null };
     /** The scopes granted by the access token */
     scopes: string[];
     /** The token provided by the authentication provider */

@@ -21,6 +21,7 @@ import AuthenticationProvider from "./AuthenticationProvider";
 import User from "./User";
 import IdModel from "./base/IdModel";
 import Encrypted from "./decorators/Encrypted";
+import type { DingTalkIdentity } from "@server/security/dingTalkIdentity";
 
 @Table({ tableName: "user_authentications", modelName: "user_authentication" })
 class UserAuthentication extends IdModel<
@@ -40,6 +41,10 @@ class UserAuthentication extends IdModel<
 
   @Column(DataType.STRING)
   providerId: string;
+
+  /** 只由可信OIDC声明或受控回填维护，不在用户资料接口公开。 */
+  @Column(DataType.JSONB)
+  identityMetadata: { dingTalk: DingTalkIdentity | null } | null;
 
   @Column(DataType.DATE)
   expiresAt: Date | null;

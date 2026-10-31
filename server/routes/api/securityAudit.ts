@@ -10,6 +10,10 @@ import { presentPolicies } from "@server/presenters";
 import { identityFromContext, recordAudit } from "@server/security/audit";
 import type { APIContext } from "@server/types";
 import { BaseSchema } from "./schema";
+import {
+  getDingTalkIdentity,
+  dingTalkIdentitySchema,
+} from "@server/security/dingTalkIdentity";
 
 const router = new Router();
 const contextSchema = BaseSchema.extend({
@@ -59,7 +63,9 @@ router.post(
     });
     authorize(user, "read", document);
     const identity = identityFromContext(ctx)!;
-    const existing =
+    const dingTalkIdentity = await getDingTalkIdentity(user);
+    identity.dingTalkIdentity = dingTalkIdentity;
+    let existing =
       ctx.input.body.accessTrace &&
       (await Event.findOne({
         where: {
@@ -75,6 +81,21 @@ router.post(
           } as unknown as WhereAttributeHashValue<Event["data"]>,
         },
       }));
+    if (existing) {
+      const previous = dingTalkIdentitySchema.safeParse(
+        existing.data?.dingTalkIdentity
+      );
+      if (
+        previous.success !== !!dingTalkIdentity ||
+        (previous.success &&
+          dingTalkIdentity &&
+          (previous.data.unionId !== dingTalkIdentity.unionId ||
+            previous.data.subject !== dingTalkIdentity.subject ||
+            previous.data.issuer !== dingTalkIdentity.issuer))
+      ) {
+        existing = undefined;
+      }
+    }
     const recorded =
       !!existing ||
       (await recordAudit(identity, {
@@ -92,7 +113,12 @@ router.post(
             ? identity.traceId
             : undefined,
         name: user.name,
+        userId: user.id,
+        documentId: document.id,
         account: user.email ?? user.id,
+        ...(dingTalkIdentity
+          ? { dingTalkUnionId: dingTalkIdentity.unionId }
+          : {}),
         canPrint: !!can(user, "download", document),
       },
     };

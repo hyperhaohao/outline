@@ -26,6 +26,7 @@ import userProvisioner from "./userProvisioner";
 import type { APIContext } from "@server/types";
 import { addSeconds } from "date-fns";
 import { createContext } from "@server/context";
+import type { DingTalkIdentity } from "@server/security/dingTalkIdentity";
 
 type Props = {
   /** Details of the user logging in from SSO provider */
@@ -68,6 +69,8 @@ type Props = {
   authentication: {
     /** External identifier of the user in the authentication provider  */
     providerId: string;
+    /** 服务端验证后的钉钉绑定，未启用此扩展的提供方不维护该字段。 */
+    identityMetadata?: { dingTalk: DingTalkIdentity | null };
     /** The scopes granted by the access token */
     scopes: string[];
     /** The token provided by the authentication provider */

@@ -5,6 +5,7 @@ import Logger from "@server/logging/Logger";
 import { Event, type User } from "@server/models";
 import type { AppContext } from "@server/types";
 import { normalizeIp } from "@server/utils/ip";
+import { getDingTalkIdentity, type DingTalkIdentity } from "./dingTalkIdentity";
 
 /** 审计仅接收白名单元数据，不接受正文、凭据或完整请求。 */
 export interface AuditIdentity {
@@ -14,6 +15,7 @@ export interface AuditIdentity {
   credentialId?: string;
   clientId?: string;
   ip?: string;
+  dingTalkIdentity?: DingTalkIdentity;
 }
 
 /** 审计结果描述，目标仅保存标识，避免无权资源信息泄露。 */
@@ -72,6 +74,12 @@ export async function recordAudit(
   required = false
 ): Promise<boolean> {
   try {
+    const dingTalkIdentity =
+      identity.dingTalkIdentity ??
+      (operation.operation === "document.view" ||
+      operation.operation === "browser.print"
+        ? await getDingTalkIdentity(identity.user)
+        : undefined);
     await Event.create(
       {
         name: "security.audit",
@@ -80,6 +88,7 @@ export async function recordAudit(
         ip: normalizeIp(identity.ip),
         data: {
           role: identity.user.role,
+          ...(dingTalkIdentity ? { dingTalkIdentity } : {}),
           channel: identity.channel,
           traceId: identity.traceId,
           credentialId: identity.credentialId,

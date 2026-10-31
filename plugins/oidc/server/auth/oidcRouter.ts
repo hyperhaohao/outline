@@ -32,6 +32,7 @@ import config from "../../plugin.json";
 import env from "../env";
 import { OIDCStrategy } from "./OIDCStrategy";
 import { createContext } from "@server/context";
+import { verifyDingTalkIdentity } from "../dingTalkIdentity";
 
 export interface OIDCEndpoints {
   authorizationURL: string;
@@ -213,6 +214,12 @@ export function createOIDCRouter(
               );
             }
 
+            // 绑定仅来自独立验签的声明，不能使用JWT.decode或前端传入值作为身份依据。
+            const identityMetadata = await verifyDingTalkIdentity(
+              params.id_token,
+              String(profileId)
+            );
+
             // Check if the picture field is a Base64 data URL and filter it out
             // to avoid validation errors in the User model
             let avatarUrl = profile.picture;
@@ -252,6 +259,7 @@ export function createOIDCRouter(
               },
               authentication: {
                 providerId: profileId,
+                identityMetadata,
                 accessToken,
                 refreshToken,
                 expiresIn: params.expires_in,

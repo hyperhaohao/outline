@@ -49,6 +49,8 @@ describe("工作区水印与动态打印保护", () => {
     vi.mocked(client.post).mockReset();
     vi.mocked(client.post).mockImplementation(async (path, data) => ({
       data: {
+        userId: "watermark-user",
+        documentId: (data as { documentId: string }).documentId,
         name: "测试管理员",
         account: "qa@example.test",
         traceId: `${(data as { documentId: string }).documentId}-trace`,
@@ -109,6 +111,89 @@ describe("工作区水印与动态打印保护", () => {
     });
     expect(blocked()).toBe(false);
     expect(securityStore.traces).not.toContain("blocked-doc-trace");
+  });
+
+  it("完整显示钉钉标识且不写入正文", async () => {
+    const unionId = "Corp-UnionID_" + "1234567890".repeat(8);
+    vi.mocked(client.post).mockResolvedValue({
+      data: {
+        userId: "watermark-user",
+        documentId: "allowed-doc",
+        name: "测试管理员",
+        account: "qa@example.test",
+        dingTalkUnionId: unionId,
+        traceId: "test-full-id",
+        canPrint: true,
+      },
+      policies: [],
+    });
+    await act(async () => {
+      mount(["allowed-doc"]);
+    });
+    const tile = document.querySelector(".outline-dingtalk-watermark");
+    expect(tile?.textContent).toBe("钉钉 UnionID：" + unionId);
+    expect(container.textContent).not.toContain(unionId);
+  });
+
+  it("没有钉钉绑定或响应属于旧用户时不显示猜测身份", async () => {
+    await act(async () => {
+      mount(["allowed-doc"]);
+    });
+    expect(document.querySelector(".outline-dingtalk-watermark")).toBeNull();
+    vi.mocked(client.post).mockResolvedValue({
+      data: {
+        userId: "old-user",
+        documentId: "allowed-doc",
+        name: "其他用户",
+        account: "other@example.test",
+        dingTalkUnionId: "other-private-id",
+        canPrint: true,
+      },
+      policies: [],
+    });
+    await act(async () => {
+      vi.advanceTimersByTime(10000);
+    });
+    expect(document.querySelector(".outline-dingtalk-watermark")).toBeNull();
+    expect(
+      document.querySelector(".outline-identity-watermark")?.textContent
+    ).not.toContain("other-private-id");
+    expect(blocked()).toBe(true);
+  });
+
+  it("视口变成2K或4K后动态铺满，不停留在固定30块", async () => {
+    const initialWidth = window.innerWidth;
+    const initialHeight = window.innerHeight;
+    await act(async () => {
+      mount(["allowed-doc"]);
+    });
+    for (const [width, height, count] of [
+      [2560, 1440, 72],
+      [3840, 2160, 156],
+    ]) {
+      await act(async () => {
+        Object.defineProperty(window, "innerWidth", {
+          configurable: true,
+          value: width,
+        });
+        Object.defineProperty(window, "innerHeight", {
+          configurable: true,
+          value: height,
+        });
+        window.dispatchEvent(new Event("resize"));
+      });
+      expect(
+        document.querySelector(".outline-identity-watermark")?.children
+      ).toHaveLength(count);
+    }
+    Object.defineProperty(window, "innerWidth", {
+      configurable: true,
+      value: initialWidth,
+    });
+    Object.defineProperty(window, "innerHeight", {
+      configurable: true,
+      value: initialHeight,
+    });
   });
 
   it("在线权限撤销或服务器不可达后，下一次打印重新检查并保护", async () => {

@@ -8,14 +8,22 @@ import useStores from "~/hooks/useStores";
 import securityStore from "~/stores/DocumentSecurityStore";
 import { client } from "~/utils/ApiClient";
 import {
+  watermarkTileCount,
+  WATERMARK_COLUMN_WIDTH,
+  WATERMARK_ROW_HEIGHT,
+} from "~/utils/watermarkLayout";
+import {
   registerPrintGuard,
   updatePrintProtection,
 } from "~/utils/printSecurity";
 
 interface SecurityContext {
+  userId: string;
+  documentId: string;
   traceId?: string;
   name: string;
   account: string;
+  dingTalkUnionId?: string;
   canPrint: boolean;
 }
 
@@ -26,6 +34,13 @@ function DocumentSecurity({ documentId }: { documentId: string }) {
   const [context, setContext] = useState<SecurityContext>();
   const [verifiedAt, setVerifiedAt] = useState(0);
   const [time, setTime] = useState(new Date());
+  const [tileCount, setTileCount] = useState(() =>
+    watermarkTileCount(window.innerWidth, window.innerHeight)
+  );
+  const currentContext =
+    context?.userId === user?.id && context?.documentId === documentId
+      ? context
+      : undefined;
   const token = useRef(Symbol("watermark"));
   const latest = useRef<() => boolean>(() => false);
   const ability = stores.policies.abilities(documentId).download;
@@ -33,7 +48,7 @@ function DocumentSecurity({ documentId }: { documentId: string }) {
   const exportEnabled = team?.getPreference(TeamPreference.ViewersCanExport);
   latest.current = () =>
     !!(
-      context?.canPrint &&
+      currentContext?.canPrint &&
       ability &&
       user &&
       ((!user.isViewer && !user.isGuest) || exportEnabled) &&
@@ -46,7 +61,7 @@ function DocumentSecurity({ documentId }: { documentId: string }) {
   );
   useLayoutEffect(() => {
     updatePrintProtection();
-  }, [context, ability, role, exportEnabled, verifiedAt]);
+  }, [currentContext, ability, role, exportEnabled, verifiedAt]);
 
   useEffect(() => {
     let active = true;
@@ -77,7 +92,18 @@ function DocumentSecurity({ documentId }: { documentId: string }) {
       active = false;
       window.clearInterval(timer);
     };
-  }, [documentId, role, exportEnabled, stores.documents]);
+  }, [documentId, user?.id, role, exportEnabled, stores.documents]);
+
+  useEffect(() => {
+    const resize = () =>
+      setTileCount(watermarkTileCount(window.innerWidth, window.innerHeight));
+    window.addEventListener("resize", resize);
+    window.addEventListener("beforeprint", resize);
+    return () => {
+      window.removeEventListener("resize", resize);
+      window.removeEventListener("beforeprint", resize);
+    };
+  }, []);
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -104,16 +130,17 @@ function DocumentSecurity({ documentId }: { documentId: string }) {
     timeZone: "Asia/Shanghai",
     hour12: false,
   });
-  const label = `${context?.name ?? user?.name ?? ""} · ${context?.account ?? user?.email ?? user?.id ?? ""}`;
+  const label = `${currentContext?.name ?? user?.name ?? ""} · ${currentContext?.account ?? user?.email ?? user?.id ?? ""}`;
   useLayoutEffect(() => {
     const currentToken = token.current;
     securityStore.set(currentToken, {
-      name: context?.name ?? user?.name ?? "",
-      account: context?.account ?? user?.email ?? user?.id ?? "",
-      traceId: context?.traceId,
+      name: currentContext?.name ?? user?.name ?? "",
+      account: currentContext?.account ?? user?.email ?? user?.id ?? "",
+      traceId: currentContext?.traceId,
+      dingTalkUnionId: currentContext?.dingTalkUnionId,
     });
     return () => securityStore.remove(currentToken);
-  }, [context, user?.name, user?.email, user?.id]);
+  }, [currentContext, user?.name, user?.email, user?.id]);
   return createPortal(
     <>
       <PrintStyles />
@@ -122,9 +149,14 @@ function DocumentSecurity({ documentId }: { documentId: string }) {
       </PrintDenied>
       {securityStore.isOwner(token.current) && (
         <Watermark className="outline-identity-watermark" aria-hidden="true">
-          {Array.from({ length: 30 }, (_, index) => (
+          {Array.from({ length: tileCount }, (_, index) => (
             <Tile key={index}>
               <span>{label}</span>
+              {currentContext?.dingTalkUnionId && (
+                <span className="outline-dingtalk-watermark">
+                  钉钉 UnionID：{currentContext.dingTalkUnionId}
+                </span>
+              )}
               <span>{stamp} 北京时间</span>
               <span>{securityStore.traces || "访问审计暂不可用"}</span>
             </Tile>
@@ -144,8 +176,11 @@ const Watermark = styled.div`
   user-select: none;
   overflow: hidden;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-  grid-auto-rows: 190px;
+  grid-template-columns: repeat(
+    auto-fill,
+    minmax(${WATERMARK_COLUMN_WIDTH}px, 1fr)
+  );
+  grid-auto-rows: ${WATERMARK_ROW_HEIGHT}px;
   color: ${s("text")};
   opacity: 0.085;
   @media print {
@@ -164,6 +199,12 @@ const Tile = styled.div`
   align-items: center;
   gap: 5px;
   overflow-wrap: anywhere;
+  padding: 16px 32px;
+  span {
+    max-width: 100%;
+    white-space: normal;
+    word-break: break-all;
+  }
 `;
 const PrintDenied = styled.div`
   display: none;

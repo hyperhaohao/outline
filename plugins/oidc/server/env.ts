@@ -5,6 +5,20 @@ import environment from "@server/utils/environment";
 import { CannotUseWithout } from "@server/utils/validators";
 
 class OIDCPluginEnvironment extends Environment {
+  /** 为本部署显式指定钉钉绑定令牌的签发者，缺省不改变其他OIDC提供方行为。 */
+  @IsOptional()
+  @IsUrl({ require_tld: false, allow_underscores: true })
+  public OIDC_DINGTALK_ISSUER = this.toOptionalString(
+    environment.OIDC_DINGTALK_ISSUER
+  );
+
+  /** 只允许从运维配置的地址获取身份验签公钥。 */
+  @IsOptional()
+  @IsUrl({ require_tld: false, allow_underscores: true })
+  public OIDC_DINGTALK_JWKS_URI = this.toOptionalString(
+    environment.OIDC_DINGTALK_JWKS_URI
+  );
+
   /**
    * OIDC client credentials. To enable authentication with any
    * compatible provider.
