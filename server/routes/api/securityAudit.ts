@@ -9,6 +9,8 @@ import { authorize, can } from "@server/policies";
 import { presentPolicies } from "@server/presenters";
 import { identityFromContext, recordAudit } from "@server/security/audit";
 import type { APIContext } from "@server/types";
+import { loadPublicShare } from "@server/commands/shareLoader";
+import { validatePrintSession } from "@server/security/exportApprovalAuthorization";
 import { BaseSchema } from "./schema";
 import {
   getDingTalkIdentity,
@@ -20,12 +22,17 @@ const contextSchema = BaseSchema.extend({
   body: z.object({
     documentId: z.string().uuid(),
     accessTrace: z.string().uuid().optional(),
+    shareId: z.string().optional(),
+    approvalId: z.uuid().optional(),
+    printSession: z.string().min(32).max(100).optional(),
   }),
 });
 const printSchema = BaseSchema.extend({
   body: z.object({
     documentId: z.string().uuid(),
     result: z.enum(["allowed", "denied"]),
+    approvalId: z.uuid().optional(),
+    printSession: z.string().min(32).max(100).optional(),
   }),
 });
 const listSchema = BaseSchema.extend({
@@ -61,7 +68,27 @@ router.post(
       userId: user.id,
       rejectOnEmpty: true,
     });
-    authorize(user, "read", document);
+    const originalRead = !!can(user, "read", document);
+    if (!originalRead && ctx.input.body.shareId) {
+      await loadPublicShare({
+        id: ctx.input.body.shareId,
+        documentId: document.id,
+        user,
+        authenticationType: ctx.state.auth.type,
+        teamId: user.teamId,
+      });
+    } else {
+      authorize(user, "read", document);
+    }
+    const approvedPrintSession =
+      originalRead &&
+      process.env.RUIMA_SAFE_MODE !== "true" &&
+      (await validatePrintSession(
+        user,
+        document.id,
+        ctx.input.body.approvalId,
+        ctx.input.body.printSession
+      ));
     const identity = identityFromContext(ctx)!;
     const dingTalkIdentity = await getDingTalkIdentity(user);
     identity.dingTalkIdentity = dingTalkIdentity;
@@ -119,7 +146,10 @@ router.post(
         ...(dingTalkIdentity
           ? { dingTalkUnionId: dingTalkIdentity.unionId }
           : {}),
-        canPrint: !!can(user, "download", document),
+        approvedPrintSession,
+        canPrint:
+          originalRead &&
+          (!!can(user, "download", document) || approvedPrintSession),
       },
     };
   }
@@ -136,9 +166,19 @@ router.post(
       rejectOnEmpty: true,
     });
     authorize(ctx.state.auth.user, "read", document);
+    const user = ctx.state.auth.user;
+    const allowed =
+      process.env.RUIMA_SAFE_MODE !== "true" &&
+      (!!can(user, "download", document) ||
+        (await validatePrintSession(
+          user,
+          document.id,
+          ctx.input.body.approvalId,
+          ctx.input.body.printSession
+        )));
     await recordAudit(identityFromContext(ctx)!, {
       operation: "browser.print",
-      result,
+      result: result === "allowed" && allowed ? "allowed" : "denied",
       targetIds: [documentId],
       clientReported: true,
       reason: "client_reported",

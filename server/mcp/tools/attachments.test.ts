@@ -88,6 +88,7 @@ describe("create_attachment", () => {
         size: 1000,
       }
     );
-    expect(res?.error).toMatchObject({ code: -32602 });
+    expect(res?.error ?? res?.result?.isError).toBeTruthy();
+    expect(await Attachment.count({ where: { userId: user.id } })).toBe(0);
   });
 });

@@ -1,6 +1,8 @@
 import type { WhereOptions } from "sequelize";
 import { Op } from "sequelize";
 import isUUID from "validator/lib/isUUID";
+import { AuthenticationType } from "@shared/types";
+import { AuthenticationError } from "@server/errors";
 import type { NavigationNode } from "@shared/types";
 import { UrlHelper } from "@shared/utils/UrlHelper";
 import {
@@ -12,12 +14,15 @@ import {
 import type { User } from "@server/models";
 import { Collection, Document, Share } from "@server/models";
 import { authorize, can } from "@server/policies";
+import { authorizeInternalShareReader } from "@server/security/internalSharing";
 
 type LoadPublicShareProps = {
   id: string;
   collectionId?: string;
   documentId?: string;
   teamId?: string;
+  user?: User;
+  authenticationType?: AuthenticationType;
 };
 
 export async function loadPublicShare({
@@ -25,7 +30,12 @@ export async function loadPublicShare({
   collectionId,
   documentId,
   teamId,
+  user,
+  authenticationType,
 }: LoadPublicShareProps) {
+  if (!user || authenticationType !== AuthenticationType.APP) {
+    throw AuthenticationError("请先登录瑞玛知识库");
+  }
   const urlId =
     !isUUID(id) && UrlHelper.SHARE_URL_SLUG_REGEX.test(id) ? id : undefined;
 
@@ -37,7 +47,9 @@ export async function loadPublicShare({
     revokedAt: {
       [Op.is]: null,
     },
-    published: true,
+    published: false,
+    audience: "workspace",
+    internalEnabled: true,
   };
 
   if (urlId) {
@@ -77,6 +89,8 @@ export async function loadPublicShare({
   ) {
     throw NotFoundError();
   }
+
+  await authorizeInternalShareReader(user, share);
 
   const isDraftWithoutCollection =
     !!share.document?.isDraft && !share.document.collectionId;
@@ -126,6 +140,9 @@ export async function loadPublicShare({
     document = share.document;
   }
 
+  if (document && (!document.isActive || !document.publishedAt)) {
+    throw NotFoundError();
+  }
   if (document?.isTrialImport) {
     throw PaymentRequiredError();
   }
@@ -202,7 +219,8 @@ export async function loadShareWithParent({
         revokedAt: {
           [Op.is]: null,
         },
-        published: true,
+        audience: "workspace",
+        internalEnabled: true,
         teamId: user.teamId,
         collectionId: docCollectionId,
       },

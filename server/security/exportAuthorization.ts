@@ -1,3 +1,4 @@
+import type { ExportApproval } from "@server/models";
 import {
   ApiKey,
   OAuthAuthentication,
@@ -9,6 +10,8 @@ import {
 } from "@server/models";
 import { Op } from "sequelize";
 import { authorize } from "@server/policies";
+import { isPersonalSupervisor } from "@server/policies/utils";
+import { validateApprovedFileOperation } from "./exportApprovalAuthorization";
 import { AuthorizationError } from "@server/errors";
 import { FileOperationType, type NavigationNode } from "@shared/types";
 
@@ -16,10 +19,43 @@ import { FileOperationType, type NavigationNode } from "@shared/types";
 export function authorizeExport(
   user: User,
   resource: Document | Collection | Team | null | undefined,
-  phase: "create" | "download" = "create"
+  phase: "create" | "download" = "create",
+  approval?: ExportApproval
 ): asserts resource is Document | Collection | Team {
   if (!resource) {
     throw AuthorizationError();
+  }
+  if (process.env.RUIMA_SAFE_MODE === "true") {
+    throw AuthorizationError("维护期间暂停导出");
+  }
+  if (!user.isAdmin) {
+    if (
+      !approval ||
+      approval.userId !== user.id ||
+      approval.teamId !== user.teamId ||
+      !["approved", "consumed"].includes(approval.status) ||
+      approval.action !== "export"
+    ) {
+      throw AuthorizationError("请先提交导出申请，等待知识库管理员审核");
+    }
+    if (
+      resource instanceof Team ||
+      (resource instanceof Document &&
+        !approval.manifest.some((item) => item.id === resource.id))
+    ) {
+      throw AuthorizationError();
+    }
+    authorize(
+      user,
+      resource instanceof Document ? "read" : "readDocument",
+      resource
+    );
+    const collection =
+      resource instanceof Collection ? resource : resource.collection;
+    if (isPersonalSupervisor(user, collection)) {
+      throw AuthorizationError();
+    }
+    return;
   }
   const action =
     resource instanceof Document
@@ -87,6 +123,13 @@ export async function authorizeExportOperation(
       throw AuthorizationError();
     }
   }
+  if (process.env.RUIMA_SAFE_MODE === "true") {
+    throw AuthorizationError("维护期间暂停导出文件读取");
+  }
+  if (!user.isAdmin || operation.options?.approvalId) {
+    await validateApprovedFileOperation(user, operation);
+    return user;
+  }
   let ids: string[] = [];
   if (operation.documentId) {
     const document = await Document.findByPk(operation.documentId, {
@@ -148,6 +191,10 @@ export async function verifyExportTree(
   operation: FileOperation,
   nodes: NavigationNode[]
 ) {
+  const approved =
+    !user.isAdmin || operation.options?.approvalId
+      ? await validateApprovedFileOperation(user, operation)
+      : undefined;
   const ids = new Set(operation.options?.exportedDocumentIds ?? []);
   const visit = (tree: NavigationNode[]) =>
     tree.forEach((node) => {
@@ -155,7 +202,13 @@ export async function verifyExportTree(
       visit(node.children ?? []);
     });
   visit(nodes);
-  await authorizeExportDocuments(user, [...ids]);
+  if (
+    approved &&
+    [...ids].some((id) => !approved.manifest.some((item) => item.id === id))
+  ) {
+    throw AuthorizationError("导出树超出已批准范围");
+  }
+  await authorizeExportDocuments(user, [...ids], approved);
   await operation.update(
     { options: { ...operation.options, exportedDocumentIds: [...ids] } },
     { hooks: false }
@@ -163,7 +216,11 @@ export async function verifyExportTree(
 }
 
 /** 包含子文档或集合内容时逐篇校验，不能通过父文档绕过更严格的子文档权限。 */
-export async function authorizeExportDocuments(user: User, ids: string[]) {
+export async function authorizeExportDocuments(
+  user: User,
+  ids: string[],
+  approval?: ExportApproval
+) {
   for (let offset = 0; offset < ids.length; offset += 20) {
     await Promise.all(
       ids.slice(offset, offset + 20).map(async (id) => {
@@ -171,7 +228,7 @@ export async function authorizeExportDocuments(user: User, ids: string[]) {
           userId: user.id,
           rejectOnEmpty: true,
         });
-        authorizeExport(user, document);
+        authorizeExport(user, document, "create", approval);
       })
     );
   }

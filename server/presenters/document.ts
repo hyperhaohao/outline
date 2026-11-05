@@ -1,5 +1,5 @@
 import { Op } from "sequelize";
-import { Hour } from "@shared/utils/time";
+import { internalShareContent } from "@server/security/sharedContent";
 import { traceFunction } from "@server/logging/tracing";
 import type { Document } from "@server/models";
 import FileOperation from "@server/models/FileOperation";
@@ -38,17 +38,20 @@ async function presentDocument(
 
   const asData = !ctx || Number(ctx?.headers["x-api-version"] ?? 0) >= 3;
 
-  const data = await DocumentHelper.toJSON(
+  const rawData = await DocumentHelper.toJSON(
     document,
     options.isPublic
       ? {
-          signedUrls: Hour.seconds,
           teamId: document.teamId,
           removeMarks: ["comment"],
           internalUrlBase: `/s/${options.shareId}`,
         }
       : undefined
   );
+
+  const data = options.shareId
+    ? internalShareContent(rawData, options.shareId, document.id)
+    : rawData;
 
   const text =
     !asData || options?.includeText

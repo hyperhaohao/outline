@@ -24,7 +24,9 @@ export default function presentShare(share: Share, options: Options = {}) {
     documentId: share.documentId,
     documentTitle: share.document?.title,
     documentUrl: share.document?.url,
-    published: share.published,
+    published: false,
+    audience: share.audience,
+    enabled: share.internalEnabled,
     url: share.canonicalUrl,
     urlId: share.urlId,
     ...(options.isPublic || !share.user

@@ -77,7 +77,10 @@ export async function recordAudit(
     const dingTalkIdentity =
       identity.dingTalkIdentity ??
       (operation.operation === "document.view" ||
-      operation.operation === "browser.print"
+      operation.operation === "browser.print" ||
+      /^(export|documents\.export|collections\.export|fileOperations\.redirect)/.test(
+        operation.operation
+      )
         ? await getDingTalkIdentity(identity.user)
         : undefined);
     await Event.create(

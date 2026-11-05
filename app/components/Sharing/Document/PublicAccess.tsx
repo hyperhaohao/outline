@@ -23,7 +23,7 @@ import { ResizingHeightContainer } from "../../ResizingHeightContainer";
 import Text from "../../Text";
 import Tooltip from "../../Tooltip";
 import { ListItem } from "../components/ListItem";
-import ShareSettingsPopover from "../components/ShareSettingsPopover";
+
 import {
   DomainPrefix,
   ShareLinkInput,
@@ -69,15 +69,17 @@ function PublicAccess({ document, share, sharedParent, ref }: Props) {
           const newShare = await shares.create({
             type: "document",
             documentId: document.id,
-            published: true,
+            published: false,
+            audience: "workspace",
+            enabled: true,
           });
           copy(newShare.url);
-          toast.success(t("Public link copied to clipboard"));
+          toast.success(t("内部分享链接已复制，收件人须登录瑞玛知识库"));
         } else if (share) {
-          await share.save({ published: checked });
+          await share.save({ enabled: checked });
           if (checked) {
             copy(share.url);
-            toast.success(t("Public link copied to clipboard"));
+            toast.success(t("内部分享链接已复制，收件人须登录瑞玛知识库"));
           }
         }
       } catch (err) {
@@ -122,7 +124,7 @@ function PublicAccess({ document, share, sharedParent, ref }: Props) {
   );
 
   const handleCopied = React.useCallback(() => {
-    toast.success(t("Public link copied to clipboard"));
+    toast.success(t("内部分享链接已复制，收件人须登录瑞玛知识库"));
   }, [t]);
 
   const shareUrl =
@@ -131,7 +133,7 @@ function PublicAccess({ document, share, sharedParent, ref }: Props) {
       : (share?.url ?? "");
 
   const copyButton = (
-    <Tooltip content={t("Copy public link")}>
+    <Tooltip content={t("复制内部分享链接")}>
       <CopyToClipboard text={shareUrl} onCopy={handleCopied}>
         <NudeButton type="button" disabled={!share} style={{ marginRight: 3 }}>
           <CopyIcon color={theme.placeholder} size={18} />
@@ -143,7 +145,7 @@ function PublicAccess({ document, share, sharedParent, ref }: Props) {
   return (
     <div ref={ref}>
       <ListItem
-        title={t("Publish to web")}
+        title={t("内部分享")}
         subtitle={
           <>
             {sharedParent && !document.isDraft ? (
@@ -171,7 +173,7 @@ function PublicAccess({ document, share, sharedParent, ref }: Props) {
                 />
               )
             ) : (
-              t("Allow anyone with the link to access")
+              t("同一瑞玛工作区的有效员工登录后，凭链接只读查看")
             )}
           </>
         }
@@ -183,8 +185,8 @@ function PublicAccess({ document, share, sharedParent, ref }: Props) {
         actions={
           sharedParent && !document.isDraft ? null : (
             <Switch
-              aria-label={t("Publish to internet")}
-              checked={share?.published ?? false}
+              aria-label={t("允许瑞玛员工登录后查看")}
+              checked={share?.enabled ?? false}
               onChange={handlePublishedChange}
               disabled={!canPublish || creating}
               width={26}
@@ -195,11 +197,11 @@ function PublicAccess({ document, share, sharedParent, ref }: Props) {
       />
 
       <ResizingHeightContainer>
-        {sharedParent?.published && !document.isDraft ? (
+        {sharedParent?.enabled && !document.isDraft ? (
           <ShareLinkInput type="text" disabled defaultValue={shareUrl}>
             {copyButton}
           </ShareLinkInput>
-        ) : share?.published ? (
+        ) : share?.enabled ? (
           <Flex align="center" gap={2}>
             <ShareLinkInput
               type="text"
@@ -216,17 +218,14 @@ function PublicAccess({ document, share, sharedParent, ref }: Props) {
             >
               {copyButton}
             </ShareLinkInput>
-            <ShareSettingsPopover share={share} />
           </Flex>
         ) : null}
 
-        {share?.published && !share.includeChildDocuments ? (
+        {share?.enabled && !share.includeChildDocuments ? (
           <Text as="p" type="tertiary" size="xsmall">
             <StyledInfoIcon color={theme.textTertiary} />
             <span>
-              {t(
-                "Nested documents are not shared on the web. Toggle sharing to enable access. This will be the default behavior in the future."
-              )}
+              {t("此链接仅分享当前文档，不包含下级文档。收件人须登录后查看。")}
             </span>
           </Text>
         ) : null}

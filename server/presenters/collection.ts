@@ -1,5 +1,5 @@
 import { auditPersonalCollection } from "@server/security/personalAccess";
-import { Hour } from "@shared/utils/time";
+import { internalShareContent } from "@server/security/sharedContent";
 import type Collection from "@server/models/Collection";
 import { DocumentHelper } from "@server/models/helpers/DocumentHelper";
 import type { APIContext } from "@server/types";
@@ -26,6 +26,11 @@ export default async function presentCollection(
   await auditPersonalCollection(ctx, collection);
   const asData = !ctx || Number(ctx?.headers["x-api-version"] ?? 0) >= 3;
 
+  const rawData = await DocumentHelper.toJSON(collection);
+  const sharedData = options.shareId
+    ? internalShareContent(rawData, options.shareId)
+    : rawData;
+
   const res: Record<string, unknown> = {
     id: collection.id,
     url: collection.path,
@@ -35,16 +40,7 @@ export default async function presentCollection(
       options.includeData === false
         ? undefined
         : asData || options.includeData
-          ? await DocumentHelper.toJSON(
-              collection,
-              options.isPublic
-                ? {
-                    signedUrls: Hour.seconds,
-                    teamId: collection.teamId,
-                    internalUrlBase: `/s/${options.shareId}`,
-                  }
-                : undefined
-            )
+          ? sharedData
           : undefined,
     description:
       !asData || options.includeText ? collection.description : undefined,

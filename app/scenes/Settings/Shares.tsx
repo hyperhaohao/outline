@@ -101,7 +101,7 @@ function Shares() {
           <Notice icon={<WarningIcon />}>
             {t("Sharing is currently disabled.")}{" "}
             <Trans
-              defaults="You can globally enable and disable public document sharing in the <em>security settings</em>."
+              defaults="可在<em>安全设置</em>中统一启用或关闭内部分享。"
               components={{
                 em: <Link to="/settings/security" />,
               }}
@@ -112,11 +112,7 @@ function Shares() {
       )}
 
       <Text as="p" type="secondary">
-        <Trans>
-          Documents that have been shared are listed below. Anyone that has the
-          public link can access a read-only version of the document until the
-          link has been revoked.
-        </Trans>
+        以下为内部分享链接。同一工作区的有效员工须登录后只读访问，关闭或撤销后停止访问。
       </Text>
 
       <StickyFilters>

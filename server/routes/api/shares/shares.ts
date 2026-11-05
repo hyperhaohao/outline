@@ -36,15 +36,14 @@ import type { APIContext } from "@server/types";
 import { RateLimiterStrategy } from "@server/utils/RateLimiter";
 import { getTeamFromContext } from "@server/utils/passport";
 import { QueryHelper } from "@server/storage/QueryHelper";
-import { navigationNodeToSitemap } from "@server/utils/sitemap";
 import pagination from "../middlewares/pagination";
 import * as T from "./schema";
 import {
   loadPublicShare,
   loadShareWithParent,
 } from "@server/commands/shareLoader";
-import shareDomains from "@server/middlewares/shareDomains";
 import env from "@server/env";
+import { canManageInternalShare } from "@server/security/internalSharing";
 import { safeEqual } from "@server/utils/crypto";
 
 const router = new Router();
@@ -63,6 +62,8 @@ router.post(
     // only public link loads will send "id".
     if (id) {
       let { share, sharedTree, collection, document } = await loadPublicShare({
+        user: ctx.state.auth?.user,
+        authenticationType: ctx.state.auth?.type,
         id,
         collectionId,
         documentId,
@@ -189,7 +190,8 @@ router.post(
     const shareWhere: WhereOptions<Share> = {
       teamId: user.teamId,
       userId: user.id,
-      published: true,
+      audience: "workspace",
+      internalEnabled: true,
       revokedAt: {
         [Op.is]: null,
       },
@@ -272,7 +274,6 @@ router.post(
       documentId,
       published,
       urlId,
-      includeChildDocuments,
       allowIndexing,
       allowSubscriptions,
       showLastUpdated,
@@ -280,6 +281,14 @@ router.post(
     } = ctx.input.body;
     const { user } = ctx.state.auth;
     authorize(user, "createShare", user.team);
+    if (
+      published ||
+      allowIndexing ||
+      allowSubscriptions ||
+      process.env.RUIMA_SAFE_MODE === "true"
+    ) {
+      throw InvalidRequestError("本站仅支持员工登录后的内部分享");
+    }
 
     const collection = collectionId
       ? await Collection.findByPk(collectionId, {
@@ -306,25 +315,55 @@ router.post(
       authorize(user, "read", collection);
     }
 
+    if (!canManageInternalShare(user, document ?? collection)) {
+      throw InvalidRequestError(
+        "只有本人个人文档或所属集合管理员可以管理内部分享"
+      );
+    }
+    // 资源级串行化避免同时创建多个链接；不阻塞独立审计事务的外键校验。
+    if (document) {
+      await Document.unscoped().findOne({
+        where: { id: document.id },
+        attributes: ["id"],
+        transaction: ctx.state.transaction,
+        lock: ctx.state.transaction.LOCK.NO_KEY_UPDATE,
+      });
+    } else if (collection) {
+      await Collection.unscoped().findOne({
+        where: { id: collection.id },
+        attributes: ["id"],
+        transaction: ctx.state.transaction,
+        lock: ctx.state.transaction.LOCK.NO_KEY_UPDATE,
+      });
+    }
     const [share] = await Share.findOrCreateWithCtx(ctx, {
       where: {
         collectionId: collectionId ?? null,
         documentId: documentId ?? null,
         teamId: user.teamId,
         revokedAt: null,
+        audience: "workspace",
       },
       defaults: {
         userId: user.id,
-        published,
-        includeChildDocuments: published || includeChildDocuments,
-        allowIndexing,
-        allowSubscriptions,
+        published: false,
+        audience: "workspace",
+        internalEnabled: ctx.input.body.enabled,
+        includeChildDocuments: !!collection,
+
+        allowIndexing: false,
+        allowSubscriptions: false,
         showLastUpdated,
         showTOC,
         urlId,
       },
     });
 
+    if (ctx.input.body.enabled && !share.internalEnabled) {
+      share.internalEnabled = true;
+      share.userId = user.id;
+      await share.saveWithCtx(ctx);
+    }
     if (share.published) {
       authorize(user, "share", user.team);
       if (document) {
@@ -367,7 +406,14 @@ router.post(
     } = ctx.input.body;
 
     const { user } = ctx.state.auth;
-    authorize(user, "share", user.team);
+    if (
+      published ||
+      allowIndexing ||
+      allowSubscriptions ||
+      process.env.RUIMA_SAFE_MODE === "true"
+    ) {
+      throw InvalidRequestError("本站仅支持员工登录后的内部分享");
+    }
 
     // fetch the share with document and collection.
     const share = await Share.scope({
@@ -376,6 +422,16 @@ router.post(
 
     authorize(user, "update", share);
 
+    if (share.audience !== "workspace") {
+      throw InvalidRequestError("原公开链接已停止使用，请建立新的内部分享");
+    }
+    if (ctx.input.body.enabled !== undefined) {
+      share.internalEnabled = ctx.input.body.enabled;
+      if (ctx.input.body.enabled) {
+        share.userId = user.id;
+        share.user = user;
+      }
+    }
     if (published !== undefined) {
       share.published = published;
       if (published) {
@@ -384,7 +440,7 @@ router.post(
     }
 
     if (includeChildDocuments !== undefined) {
-      share.includeChildDocuments = includeChildDocuments;
+      share.includeChildDocuments = !!share.collectionId;
     }
 
     if (!isUndefined(urlId)) {
@@ -412,6 +468,9 @@ router.post(
       share.iconUrl = iconUrl || null;
     }
 
+    share.published = false;
+    share.allowIndexing = false;
+    share.allowSubscriptions = false;
     await share.saveWithCtx(ctx);
 
     ctx.body = {
@@ -447,33 +506,9 @@ router.post(
   }
 );
 
-router.get(
-  "shares.sitemap",
-  rateLimiter(RateLimiterStrategy.TwentyFivePerMinute),
-  shareDomains(),
-  validate(T.SharesSitemapSchema),
-  async (ctx: APIContext<T.SharesSitemapReq>) => {
-    const { id } = ctx.input.query;
-    const team = await getTeamFromContext(ctx, { includeOAuthState: false });
-
-    const { share, sharedTree } = await loadPublicShare({
-      id,
-      teamId: team?.id,
-    });
-
-    if (!share.allowIndexing) {
-      ctx.status = 404;
-      return;
-    }
-
-    const baseUrl = share.domain
-      ? `https://${share.domain}`
-      : `${share.team.url ?? process.env.URL}/s/${id}`;
-
-    ctx.set("Content-Type", "application/xml");
-    ctx.body = navigationNodeToSitemap(sharedTree, baseUrl);
-  }
-);
+router.get("shares.sitemap", () => {
+  throw NotFoundError("内部分享不提供公开站点地图");
+});
 
 router.post(
   "shares.subscribe",
@@ -491,6 +526,8 @@ router.post(
 
     // Validate the share exists and is published
     const { share, document } = await loadPublicShare({
+      user: ctx.state.auth?.user,
+      authenticationType: ctx.state.auth?.type,
       id: shareId,
       documentId,
       teamId: team?.id,

@@ -277,6 +277,7 @@ export type DocumentsInsightsReq = z.infer<typeof DocumentsInsightsSchema>;
 export const DocumentsExportSchema = BaseSchema.extend({
   body: BaseIdSchema.extend({
     signedUrls: z.number().optional(),
+    approvalId: z.uuid().optional(),
     includeChildDocuments: z.boolean().prefault(false),
   }),
 });

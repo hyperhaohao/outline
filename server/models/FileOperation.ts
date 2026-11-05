@@ -38,6 +38,9 @@ import { Buckets } from "./helpers/AttachmentHelper";
 export type FileOperationOptions = {
   /** 导出内容标识清单：资源移动后仍按原文件包含的文档复查。 */
   exportedDocumentIds?: string[];
+  /** 单次审批编号及明确的子文档范围。 */
+  approvalId?: string;
+  includeChildDocuments?: boolean;
   /** 保存导出请求的安全元数据，执行时重查凭据 scope；不保存原始 Token。 */
   audit?: {
     traceId: string;
@@ -177,10 +180,15 @@ class FileOperation extends ParanoidModel<
     // 上游将导出创建集中到模型，文档与集合路径均需保留清单及凭据来源。
     const resource =
       "document" in options ? options.document : options.collection;
-    const exportedDocumentIds = resource
-      ? await exportDocumentIds(resource)
-      : [];
-    await authorizeExportDocuments(user, exportedDocumentIds);
+    const { prepareApprovedExport } =
+      await import("@server/security/exportApprovalAuthorization");
+    const approval = await prepareApprovedExport(ctx, resource, format);
+    const exportedDocumentIds = approval
+      ? approval.manifest.map((item) => item.id)
+      : resource
+        ? await exportDocumentIds(resource)
+        : [];
+    await authorizeExportDocuments(user, exportedDocumentIds, approval);
     // The owner is stored on the export, as a document can move out of the
     // personal collection after it was exported.
     const sourceCollectionId =
@@ -230,18 +238,34 @@ class FileOperation extends ParanoidModel<
       userId: user.id,
       ...attributes,
       options: {
-        ...(source.options ?? {}),
+        ...source.options,
         ...("document" in options
           ? {}
           : {
               includeAttachments: options.includeAttachments ?? true,
               includePrivate: options.includePrivate ?? true,
             }),
+        ...(approval
+          ? {
+              approvalId: approval.id,
+              includeChildDocuments: approval.includeChildDocuments,
+            }
+          : {}),
         audit: exportAuditOrigin(ctx),
         exportedDocumentIds,
       },
     });
 
+    if (approval) {
+      await approval.update(
+        {
+          status: "consumed",
+          consumedAt: new Date(),
+          fileOperationId: fileOperation.id,
+        },
+        { transaction: ctx.state.transaction }
+      );
+    }
     fileOperation.user = user;
 
     if ("document" in options) {

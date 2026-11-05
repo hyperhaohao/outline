@@ -23,7 +23,7 @@ import env from "~/env";
 import usePolicy from "~/hooks/usePolicy";
 import useStores from "~/hooks/useStores";
 import { ListItem } from "../components/ListItem";
-import ShareSettingsPopover from "../components/ShareSettingsPopover";
+
 import { DomainPrefix, ShareLinkInput, StyledInfoIcon } from "../components";
 
 type Props = {
@@ -59,15 +59,17 @@ function InnerPublicAccess({ collection, share, ref }: Props) {
           const newShare = await shares.create({
             type: "collection",
             collectionId: collection.id,
-            published: true,
+            published: false,
+            audience: "workspace",
+            enabled: true,
           });
           copy(newShare.url);
-          toast.success(t("Public link copied to clipboard"));
+          toast.success(t("内部分享链接已复制，收件人须登录瑞玛知识库"));
         } else if (share) {
-          await share.save({ published: checked });
+          await share.save({ enabled: checked });
           if (checked) {
             copy(share.url);
-            toast.success(t("Public link copied to clipboard"));
+            toast.success(t("内部分享链接已复制，收件人须登录瑞玛知识库"));
           }
         }
       } catch (err) {
@@ -112,11 +114,11 @@ function InnerPublicAccess({ collection, share, ref }: Props) {
   );
 
   const handleCopied = React.useCallback(() => {
-    toast.success(t("Public link copied to clipboard"));
+    toast.success(t("内部分享链接已复制，收件人须登录瑞玛知识库"));
   }, [t]);
 
   const copyButton = (
-    <Tooltip content={t("Copy public link")}>
+    <Tooltip content={t("复制内部分享链接")}>
       <CopyToClipboard text={share?.url ?? ""} onCopy={handleCopied}>
         <NudeButton type="button" disabled={!share} style={{ marginRight: 3 }}>
           <CopyIcon color={theme.placeholder} size={18} />
@@ -128,8 +130,8 @@ function InnerPublicAccess({ collection, share, ref }: Props) {
   return (
     <div ref={ref}>
       <ListItem
-        title={t("Publish to web")}
-        subtitle={<>{t("Allow anyone with the link to access")}</>}
+        title={t("内部分享")}
+        subtitle={<>{t("同一瑞玛工作区的有效员工登录后，凭链接只读查看")}</>}
         image={
           <Squircle color={theme.text} size={AvatarSize.Medium}>
             <GlobeIcon color={theme.background} size={18} />
@@ -137,8 +139,8 @@ function InnerPublicAccess({ collection, share, ref }: Props) {
         }
         actions={
           <Switch
-            aria-label={t("Publish to internet")}
-            checked={share?.published ?? false}
+            aria-label={t("允许瑞玛员工登录后查看")}
+            checked={share?.enabled ?? false}
             onChange={handlePublishedChange}
             disabled={!canPublish || creating}
             width={26}
@@ -148,7 +150,7 @@ function InnerPublicAccess({ collection, share, ref }: Props) {
       />
 
       <ResizingHeightContainer>
-        {!!share?.published && (
+        {!!share?.enabled && (
           <>
             <Flex align="center" gap={2}>
               <ShareLinkInput
@@ -166,13 +168,12 @@ function InnerPublicAccess({ collection, share, ref }: Props) {
               >
                 {copyButton}
               </ShareLinkInput>
-              <ShareSettingsPopover share={share} />
             </Flex>
             <Flex align="flex-start" gap={4}>
               <StyledInfoIcon color={theme.textTertiary} />
               <Text type="tertiary" size="xsmall">
                 {t(
-                  "All documents in this collection will be shared on the web, including any new documents added later"
+                  "此集合的有效已发布文档和以后新增文档均可通过此链接在登录后查看"
                 )}
                 .
               </Text>

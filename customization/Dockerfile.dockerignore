@@ -16,9 +16,12 @@
 !server/
 !server/migrations/
 !server/migrations/20261012055118-security-audit-indexes.js
+!server/migrations/20261031080000-add-authentication-identity-metadata.js
+!server/migrations/20261103075257-internal-sharing-and-export-approvals.js
 !server/mcp/
 !server/mcp/skills/
 !server/mcp/skills/**
 
 !customization/
 !customization/legacy-personal-spaces.cjs
+!customization/dingtalk-identity-backfill.cjs

@@ -25,6 +25,8 @@ export enum NotificationEventType {
   Features = "emails.features",
   ExportCompleted = "emails.export_completed",
   RequestDocumentAccess = "access_requests.create",
+  ExportApprovalRequested = "export_approvals.requested",
+  ExportApprovalUpdated = "export_approvals.updated",
 }
 
 /** Channels that a notification can be delivered through. */
@@ -37,6 +39,9 @@ export enum NotificationChannelType {
 /** Extra data stored on a notification. */
 export type NotificationData = {
   emoji?: string;
+  approvalId?: string;
+  approvalTitle?: string;
+  approvalStatus?: string;
 };
 
 /** A user's notification settings, by event and optionally by channel. */
@@ -71,6 +76,8 @@ export const NotificationEventDefaults: Record<NotificationEventType, boolean> =
     [NotificationEventType.AddUserToGroup]: true,
     [NotificationEventType.RemoveUserFromGroup]: true,
     [NotificationEventType.RequestDocumentAccess]: true,
+    [NotificationEventType.ExportApprovalRequested]: true,
+    [NotificationEventType.ExportApprovalUpdated]: true,
   };
 
 /** Notices shown to the user from the `notice` query parameter. */

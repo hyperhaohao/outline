@@ -6,6 +6,7 @@ import {
 } from "@shared/types";
 import { Document, Revision, User, Team } from "@server/models";
 import { allow, cannot, can } from "./cancan";
+import { canManageInternalShare } from "@server/security/internalSharing";
 import {
   and,
   isCollectionOwner,
@@ -50,14 +51,23 @@ allow(User, ["listRevisions", "listViews"], Document, (actor, document) =>
   )
 );
 
+/** 申请资格只取原生阅读权；审批不会替代资源授权或监管边界。 */
+allow(User, "requestExport", Document, (actor, document) =>
+  and(
+    !actor.isAdmin,
+    !actor.isGuest,
+    !!document?.isActive,
+    can(actor, "read", document),
+    !isPersonalSupervisor(actor, document?.collection)
+  )
+);
+
 allow(User, "download", Document, (actor, document) =>
   and(
     !isPersonalSupervisor(actor, document?.collection),
     can(actor, "read", document),
-    or(
-      and(!actor.isGuest, !actor.isViewer),
-      !!actor.team.getPreference(TeamPreference.ViewersCanExport)
-    )
+    actor.isAdmin,
+    process.env.RUIMA_SAFE_MODE !== "true"
   )
 );
 
@@ -86,13 +96,7 @@ allow(
 );
 
 allow(User, "share", Document, (actor, document) =>
-  and(
-    !isPersonalSupervisor(actor, document?.collection),
-    !!document?.isActive,
-    isTeamMutable(actor),
-    can(actor, "read", document),
-    or(!document?.collection, can(actor, "shareDocument", document?.collection))
-  )
+  canManageInternalShare(actor, document)
 );
 
 allow(User, "update", Document, (actor, document) =>

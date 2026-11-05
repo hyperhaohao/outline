@@ -48,6 +48,11 @@ const Security = lazy(() => import("~/scenes/Settings/Security"));
 const PersonalAreas = lazy(() => import("~/scenes/Settings/PersonalAreas"), {
   exportName: "PersonalAreas",
 });
+const ExportApprovals = lazy(() => import("~/scenes/Settings/ExportApprovals"));
+const ExportApprovalReview = lazy(
+  () => import("~/scenes/Settings/ExportApprovals"),
+  { exportName: "ExportApprovalReview" }
+);
 const RiskAudit = lazy(() => import("~/scenes/Settings/RiskAudit"));
 const Shares = lazy(() => import("~/scenes/Settings/Shares"));
 const Templates = lazy(() => import("~/scenes/Settings/Templates"));
@@ -97,6 +102,24 @@ const useSettingsConfig = () => {
         path: settingsPath("risk-audit"),
         component: RiskAudit.Component,
         preload: RiskAudit.preload,
+        enabled: user.isAdmin,
+        group: t("Workspace"),
+        icon: ShieldIcon,
+      },
+      {
+        name: "我的导出与打印申请",
+        path: settingsPath("export-approvals"),
+        component: ExportApprovals.Component,
+        preload: ExportApprovals.preload,
+        enabled: !user.isGuest,
+        group: t("Account"),
+        icon: ExportIcon,
+      },
+      {
+        name: "导出与打印审批",
+        path: settingsPath("export-approval-review"),
+        component: ExportApprovalReview.Component,
+        preload: ExportApprovalReview.preload,
         enabled: user.isAdmin,
         group: t("Workspace"),
         icon: ShieldIcon,

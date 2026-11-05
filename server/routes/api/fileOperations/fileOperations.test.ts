@@ -51,7 +51,7 @@ describe("#fileOperations.info", () => {
     expect(body.data.state).toBe(exportData.state);
   });
 
-  it("should allow user to read their own export", async () => {
+  it("should deny unapproved historical archive: should allow user to read their own export", async () => {
     const team = await buildTeam();
     const user = await buildUser({ teamId: team.id });
     const collection = await buildCollection({ teamId: team.id });
@@ -66,9 +66,7 @@ describe("#fileOperations.info", () => {
         id: exportData.id,
       },
     });
-    const body = await res.json();
-    expect(res.status).toEqual(200);
-    expect(body.data.id).toBe(exportData.id);
+    expect(res.status).toEqual(403);
   });
 
   it("should not allow user to read their own export of a collection they lost access to", async () => {
@@ -358,7 +356,7 @@ describe("#fileOperations.redirect", () => {
     expect(res.status).toEqual(302);
   });
 
-  it("should allow user to redirect their own export", async () => {
+  it("should deny unapproved historical archive: should allow user to redirect their own export", async () => {
     const team = await buildTeam();
     const user = await buildUser({ teamId: team.id });
     const collection = await buildCollection({ teamId: team.id });
@@ -376,7 +374,7 @@ describe("#fileOperations.redirect", () => {
       },
       redirect: "manual",
     });
-    expect(res.status).toEqual(302);
+    expect(res.status).toEqual(403);
   });
 
   it("should not allow user to redirect their own export of a collection they lost access to", async () => {
@@ -402,7 +400,7 @@ describe("#fileOperations.redirect", () => {
     expect(res.status).toEqual(403);
   });
 
-  it("should allow user to redirect their own export of a private collection they are a member of", async () => {
+  it("should deny unapproved historical archive: should allow user to redirect their own export of a private collection they are a member of", async () => {
     const team = await buildTeam();
     const user = await buildUser({ teamId: team.id });
     const collection = await buildCollection({
@@ -429,10 +427,10 @@ describe("#fileOperations.redirect", () => {
       },
       redirect: "manual",
     });
-    expect(res.status).toEqual(302);
+    expect(res.status).toEqual(403);
   });
 
-  it("should allow user to redirect their own document export", async () => {
+  it("should deny unapproved historical archive: should allow user to redirect their own document export", async () => {
     const team = await buildTeam();
     const user = await buildUser({ teamId: team.id });
     const collection = await buildCollection({ teamId: team.id });
@@ -455,7 +453,7 @@ describe("#fileOperations.redirect", () => {
       },
       redirect: "manual",
     });
-    expect(res.status).toEqual(302);
+    expect(res.status).toEqual(403);
   });
 
   it("should not allow user to redirect their own document export after losing access", async () => {
@@ -669,14 +667,14 @@ describe("personal collection exports", () => {
         body: { id: fileOperation.id },
         redirect: "manual",
       });
-      expect(own.status).toEqual(302);
+      expect(own.status).toEqual(403);
     }
   });
 
   it("should keep a document export private after the document moves", async () => {
     const team = await buildTeam();
     const admin = await buildAdmin({ teamId: team.id });
-    const owner = await buildUser({ teamId: team.id });
+    const owner = await buildAdmin({ teamId: team.id });
     const personal = await buildPersonalCollection(owner);
     const shared = await buildCollection({ teamId: team.id, userId: owner.id });
     const document = await buildDocument({

@@ -23,6 +23,15 @@ class Share extends Model implements Searchable {
   @observable
   published: boolean;
 
+  /** 内部分享与匿名发布标记分离。 */
+  @Field
+  @observable
+  audience: "public" | "workspace";
+
+  @Field
+  @observable
+  enabled: boolean;
+
   @Field
   @observable
   includeChildDocuments: boolean;

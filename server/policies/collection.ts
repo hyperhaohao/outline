@@ -2,6 +2,7 @@ import invariant from "invariant";
 import { CollectionPermission, TeamPreference } from "@shared/types";
 import { Collection, User, Team } from "@server/models";
 import { allow, can } from "./cancan";
+import { canManageInternalShare } from "@server/security/internalSharing";
 import {
   and,
   isCollectionOwner,
@@ -76,14 +77,23 @@ allow(User, "duplicate", Collection, (actor, collection) =>
   )
 );
 
+/** Viewer与Member均可申请本人原有权限范围内的资料，不依赖分享链接。 */
+allow(User, "requestExport", Collection, (actor, collection) =>
+  and(
+    !actor.isAdmin,
+    !actor.isGuest,
+    !!collection?.isActive,
+    can(actor, "readDocument", collection),
+    !isPersonalSupervisor(actor, collection)
+  )
+);
+
 allow(User, "download", Collection, (actor, collection) =>
   and(
     can(actor, "read", collection),
     !isPersonalSupervisor(actor, collection),
-    or(
-      and(!actor.isGuest, !actor.isViewer),
-      !!actor.team.getPreference(TeamPreference.ViewersCanExport)
-    )
+    actor.isAdmin,
+    process.env.RUIMA_SAFE_MODE !== "true"
   )
 );
 
@@ -130,37 +140,9 @@ allow(User, "share", Collection, (user, collection) =>
   )
 );
 
-allow(User, "shareDocument", Collection, (user, collection) => {
-  if (
-    !collection ||
-    user.isGuest ||
-    user.teamId !== collection.teamId ||
-    !isTeamMutable(user)
-  ) {
-    return false;
-  }
-  if (!collection.sharing) {
-    return false;
-  }
-  if (collection.isPersonal) {
-    return isCollectionOwner(user, collection);
-  }
-  if (!collection.isPrivate && user.isAdmin) {
-    return true;
-  }
-
-  if (
-    collection.permission !== CollectionPermission.ReadWrite ||
-    user.isViewer
-  ) {
-    return includesMembership(collection, [
-      CollectionPermission.ReadWrite,
-      CollectionPermission.Admin,
-    ]);
-  }
-
-  return true;
-});
+allow(User, "shareDocument", Collection, (user, collection) =>
+  canManageInternalShare(user, collection)
+);
 
 allow(User, "updateDocument", Collection, (user, collection) => {
   if (

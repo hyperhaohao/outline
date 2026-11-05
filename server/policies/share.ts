@@ -1,6 +1,7 @@
 import { Share, Team, User } from "@server/models";
-import { allow, can } from "./cancan";
-import { and, isOwner, isTeamModel, isTeamMutable, or } from "./utils";
+import { allow } from "./cancan";
+import { canManageInternalShare } from "@server/security/internalSharing";
+import { and, isTeamModel, isTeamMutable } from "./utils";
 
 allow(User, "createShare", Team, (actor, team) =>
   and(
@@ -27,23 +28,10 @@ allow(User, "read", Share, (actor, share) =>
   )
 );
 
-allow(User, "update", Share, (actor, share) =>
+allow(User, ["update", "revoke"], Share, (actor, share) =>
   and(
     isTeamModel(actor, share),
-    !actor.isGuest,
-    !actor.isViewer,
-    or(
-      can(actor, "share", share?.collection),
-      can(actor, "share", share?.document)
-    )
-  )
-);
-
-allow(User, "revoke", Share, (actor, share) =>
-  and(
-    isTeamModel(actor, share),
-    !actor.isGuest,
-    !actor.isViewer,
-    or(actor.isAdmin, isOwner(actor, share))
+    share?.audience === "workspace",
+    canManageInternalShare(actor, share?.document ?? share?.collection)
   )
 );

@@ -1,6 +1,7 @@
 import { observer } from "mobx-react";
 import { Suspense } from "react";
 import useStores from "~/hooks/useStores";
+import { useComputed } from "~/hooks/useComputed";
 import lazyWithRetry from "@shared/utils/lazyWithRetry";
 import { DialogProvider } from "./DialogContext";
 
@@ -9,8 +10,8 @@ const Modal = lazyWithRetry(() => import("~/components/Modal"));
 
 function Dialogs() {
   const { dialogs } = useStores();
-  const { guide, modalStack } = dialogs;
-  const modals = [...modalStack];
+  const { guide } = dialogs;
+  const modals = useComputed(() => [...dialogs.modalStack]);
 
   return (
     <DialogProvider>

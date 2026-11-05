@@ -1,5 +1,6 @@
 import Router from "@koa/router";
 import { FileOperationType } from "@shared/types";
+import { sendApprovedDownload } from "@server/security/approvedDownload";
 import { authorizeExportOperation } from "@server/security/exportAuthorization";
 import { identityFromContext, recordAudit } from "@server/security/audit";
 import { Op, type WhereOptions } from "sequelize";
@@ -142,6 +143,10 @@ const handleFileOperationsRedirect = async (
       },
       true
     );
+  }
+  if (fileOperation.type === FileOperationType.Export && !user.isAdmin) {
+    await sendApprovedDownload(ctx, fileOperation);
+    return;
   }
   const accessUrl = await FileStorage.getSignedUrl(fileOperation.key);
   ctx.redirect(accessUrl);

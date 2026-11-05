@@ -167,6 +167,7 @@ export type CollectionsMembershipsReq = z.infer<
 
 export const CollectionsExportSchema = BaseSchema.extend({
   body: BaseIdSchema.extend({
+    approvalId: z.uuid().optional(),
     format: z
       .enum(FileOperationFormat)
       .prefault(FileOperationFormat.MarkdownZip),

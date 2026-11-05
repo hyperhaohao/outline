@@ -313,6 +313,18 @@ const handleAttachmentsRedirect = async (
     rejectOnEmpty: true,
   });
 
+  // 仅独立的头像、站点品牌资源保留公开读取；业务附件不能借旧分享绕过登录。
+  if (!user && (attachment.documentId || !attachment.isStoredInPublicBucket)) {
+    throw AuthorizationError("业务附件需先登录");
+  }
+  if (
+    user &&
+    attachment.teamId !== user.teamId &&
+    (attachment.documentId || !attachment.isStoredInPublicBucket)
+  ) {
+    throw AuthorizationError();
+  }
+
   // 普通附件继续遵循工作区规则；个人文档附件在签名前另行核对文档权限。
   // Private attachments are accessible to any member of the workspace they
   // belong to. This is intentional and not a permission bypass – attachments

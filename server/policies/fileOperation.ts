@@ -25,6 +25,15 @@ function canAccessSource(actor: User, fileOperation: FileOperation) {
   if (fileOperation.type !== FileOperationType.Export) {
     return true;
   }
+  if (
+    !actor.isAdmin &&
+    fileOperation.options?.approvalId &&
+    fileOperation.userId === actor.id
+  ) {
+    return fileOperation.documentId
+      ? can(actor, "read", fileOperation.document)
+      : can(actor, "readDocument", fileOperation.collection);
+  }
   if (fileOperation.documentId) {
     return can(actor, "download", fileOperation.document);
   }

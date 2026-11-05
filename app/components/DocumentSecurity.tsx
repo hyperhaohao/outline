@@ -5,6 +5,7 @@ import styled, { createGlobalStyle } from "styled-components";
 import { s } from "@shared/styles";
 import { TeamPreference } from "@shared/types";
 import useStores from "~/hooks/useStores";
+import printApprovalStore from "~/stores/PrintApprovalStore";
 import securityStore from "~/stores/DocumentSecurityStore";
 import { client } from "~/utils/ApiClient";
 import {
@@ -25,10 +26,17 @@ interface SecurityContext {
   account: string;
   dingTalkUnionId?: string;
   canPrint: boolean;
+  approvedPrintSession?: boolean;
 }
 
 /** 登录工作区的水印和打印保护；渲染层不接触编辑器协作数据。 */
-function DocumentSecurity({ documentId }: { documentId: string }) {
+function DocumentSecurity({
+  documentId,
+  shareId,
+}: {
+  documentId: string;
+  shareId?: string;
+}) {
   const stores = useStores();
   const { user, team } = stores.auth;
   const [context, setContext] = useState<SecurityContext>();
@@ -37,6 +45,11 @@ function DocumentSecurity({ documentId }: { documentId: string }) {
   const [tileCount, setTileCount] = useState(() =>
     watermarkTileCount(window.innerWidth, window.innerHeight)
   );
+  const printSession =
+    printApprovalStore.session?.userId === user?.id &&
+    printApprovalStore.session?.documentId === documentId
+      ? printApprovalStore.session
+      : undefined;
   const currentContext =
     context?.userId === user?.id && context?.documentId === documentId
       ? context
@@ -49,11 +62,17 @@ function DocumentSecurity({ documentId }: { documentId: string }) {
   latest.current = () =>
     !!(
       currentContext?.canPrint &&
-      ability &&
       user &&
-      ((!user.isViewer && !user.isGuest) || exportEnabled) &&
+      ((user.isAdmin && ability) ||
+        (currentContext.approvedPrintSession && printSession)) &&
       Date.now() - verifiedAt < 30000
     );
+
+  useLayoutEffect(() => {
+    if (currentContext?.approvedPrintSession && printSession) {
+      printApprovalStore.confirm();
+    }
+  }, [currentContext, printSession]);
 
   useLayoutEffect(
     () => registerPrintGuard(() => latest.current()),
@@ -72,6 +91,13 @@ function DocumentSecurity({ documentId }: { documentId: string }) {
       try {
         const response = await client.post("/securityAudit.context", {
           documentId,
+          ...(shareId ? { shareId } : {}),
+          ...(printSession
+            ? {
+                approvalId: printSession.approvalId,
+                printSession: printSession.secret,
+              }
+            : {}),
           ...(accessTrace ? { accessTrace } : {}),
         });
         if (active) {
@@ -92,7 +118,15 @@ function DocumentSecurity({ documentId }: { documentId: string }) {
       active = false;
       window.clearInterval(timer);
     };
-  }, [documentId, user?.id, role, exportEnabled, stores.documents]);
+  }, [
+    documentId,
+    user?.id,
+    role,
+    exportEnabled,
+    stores.documents,
+    shareId,
+    printSession,
+  ]);
 
   useEffect(() => {
     const resize = () =>
@@ -110,12 +144,29 @@ function DocumentSecurity({ documentId }: { documentId: string }) {
       setTime(new Date());
       updatePrintProtection();
     }, 60000);
+    const afterPrint = () => {
+      const session = printApprovalStore.session;
+      if (session?.documentId === documentId) {
+        void client
+          .post("/exportApprovals.finishPrint", {
+            id: session.approvalId,
+            printSession: session.secret,
+          })
+          .catch(() => undefined);
+      }
+      printApprovalStore.clear();
+    };
+    window.addEventListener("afterprint", afterPrint);
     const beforePrint = () => {
       const allowed = updatePrintProtection();
+      const session = printApprovalStore.session;
       void client
         .post("/securityAudit.print", {
           documentId,
           result: allowed ? "allowed" : "denied",
+          ...(session?.documentId === documentId
+            ? { approvalId: session.approvalId, printSession: session.secret }
+            : {}),
         })
         .catch(() => undefined);
     };
@@ -123,6 +174,8 @@ function DocumentSecurity({ documentId }: { documentId: string }) {
     return () => {
       window.clearInterval(timer);
       window.removeEventListener("beforeprint", beforePrint);
+      window.removeEventListener("afterprint", afterPrint);
+      afterPrint();
     };
   }, [documentId]);
 

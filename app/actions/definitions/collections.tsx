@@ -517,7 +517,9 @@ export const exportCollection = createAction({
   section: ActiveCollectionSection,
   icon: <ExportIcon />,
   visible: ({ getActivePolicies }) =>
-    getActivePolicies(Collection).some((policy) => policy.abilities.export),
+    getActivePolicies(Collection).some(
+      (policy) => policy.abilities.export || policy.abilities.requestExport
+    ),
   perform: async ({ getActiveModel, stores, t }) => {
     const collection = getActiveModel(Collection);
     if (!collection) {

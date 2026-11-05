@@ -12,6 +12,7 @@ import type { FileFormat } from "~/components/Export/FileFormatSelector";
 import MarkdownIcon from "~/components/Icons/MarkdownIcon";
 import OutlineIcon from "~/components/Icons/OutlineIcon";
 import Text from "~/components/Text";
+import { ExportApprovalRequest } from "./ExportApprovalRequest";
 import useCurrentUser from "~/hooks/useCurrentUser";
 import useStores from "~/hooks/useStores";
 
@@ -97,6 +98,15 @@ export const ExportDialog = observer(({ collection, onSubmit }: Props) => {
       icon: <OutlineIcon />,
     },
   ];
+
+  if (!user.isAdmin && collection) {
+    return (
+      <ExportApprovalRequest
+        resourceId={collection.id}
+        resourceType="collection"
+      />
+    );
+  }
 
   return (
     <ConfirmationDialog onSubmit={handleSubmit} submitText={t("Export")}>

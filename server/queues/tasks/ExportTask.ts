@@ -211,6 +211,12 @@ export default abstract class ExportTask extends BaseTask<Props> {
         throw new Error("Document not found in collection tree");
       }
 
+      if (
+        fileOperation.options?.approvalId &&
+        !fileOperation.options.includeChildDocuments
+      ) {
+        documentStructure.children = [];
+      }
       await verifyExportTree(user, fileOperation, [documentStructure]);
 
       return this.exportDocument(

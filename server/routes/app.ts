@@ -1,3 +1,4 @@
+import auth from "@server/middlewares/authentication";
 import fs from "node:fs";
 import path from "node:path";
 import util from "node:util";
@@ -213,6 +214,15 @@ export const renderApp = async (
 };
 
 export const renderShare = async (ctx: Context, next: Next) => {
+  await auth({ optional: true })(ctx, async () => undefined);
+  ctx.set("Cache-Control", "private, no-store");
+  if (!ctx.state.auth?.user) {
+    return renderApp(ctx, next);
+  }
+  if (ctx.params.format || ctx.get("Accept").includes("text/markdown")) {
+    ctx.status = 404;
+    return;
+  }
   const rootShareId = ctx.state?.rootShare?.id;
   const shareId = rootShareId ?? ctx.params.shareId;
   const collectionSlug = ctx.params.collectionSlug;
@@ -230,6 +240,8 @@ export const renderShare = async (ctx: Context, next: Next) => {
   try {
     team = await getTeamFromContext(ctx, { includeOAuthState: false });
     const result = await loadPublicShare({
+      user: ctx.state.auth?.user,
+      authenticationType: ctx.state.auth?.type,
       id: shareId,
       collectionId: collectionSlug,
       documentId: documentSlug,

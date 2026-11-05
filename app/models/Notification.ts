@@ -61,6 +61,8 @@ class Notification extends Model {
         NotificationEventType.AddUserToCollection,
       ],
       system: [
+        NotificationEventType.ExportApprovalRequested,
+        NotificationEventType.ExportApprovalUpdated,
         NotificationEventType.InviteAccepted,
         NotificationEventType.Onboarding,
         NotificationEventType.Features,
@@ -202,6 +204,10 @@ class Notification extends Model {
    */
   eventText(t: TFunction): string {
     switch (this.event) {
+      case NotificationEventType.ExportApprovalRequested:
+        return t("提交了导出或打印申请：");
+      case NotificationEventType.ExportApprovalUpdated:
+        return t("更新了导出或打印申请：");
       case NotificationEventType.PublishDocument:
         return t("published");
       case NotificationEventType.UpdateDocument:
@@ -252,6 +258,9 @@ class Notification extends Model {
    * @returns The subject.
    */
   subject(t: TFunction): string {
+    if (this.data?.approvalTitle) {
+      return this.data.approvalTitle;
+    }
     if (this.documentId) {
       return this.document?.title ?? t("a document");
     }
@@ -272,6 +281,12 @@ class Notification extends Model {
    */
   @computed
   get path() {
+    if (this.event === NotificationEventType.ExportApprovalRequested) {
+      return `/settings/export-approval-review?id=${this.data?.approvalId ?? ""}`;
+    }
+    if (this.event === NotificationEventType.ExportApprovalUpdated) {
+      return `/settings/export-approvals?id=${this.data?.approvalId ?? ""}`;
+    }
     switch (this.event) {
       case NotificationEventType.PublishDocument:
       case NotificationEventType.UpdateDocument:

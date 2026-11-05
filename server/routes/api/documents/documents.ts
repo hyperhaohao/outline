@@ -754,6 +754,8 @@ router.post(
         includeOAuthState: false,
       });
       const result = await loadPublicShare({
+        user: ctx.state.auth?.user,
+        authenticationType: ctx.state.auth?.type,
         id: shareId,
         documentId: id,
         teamId: teamFromCtx?.id,
@@ -974,6 +976,7 @@ router.post(
   rateLimiter(RateLimiterStrategy.TwentyFivePerMinute),
   auth(),
   validate(T.DocumentsExportSchema),
+  transaction(),
   async (ctx: APIContext<T.DocumentsExportReq>) => {
     const { id, signedUrls, includeChildDocuments } = ctx.input.body;
     const { user } = ctx.state.auth;
@@ -990,7 +993,9 @@ router.post(
       ),
     });
 
-    authorizeExport(user, document);
+    if (user.isAdmin) {
+      authorizeExport(user, document);
+    }
     await recordAudit(
       identityFromContext(ctx)!,
       {
@@ -1017,6 +1022,17 @@ router.post(
       );
     }
 
+    if (!user.isAdmin) {
+      const fileOperation = await FileOperation.createExport(ctx, {
+        document,
+        format: format ?? FileOperationFormat.MarkdownZip,
+      });
+      ctx.body = {
+        success: true,
+        data: { fileOperation: presentFileOperation(fileOperation) },
+      };
+      return;
+    }
     if (includeChildDocuments) {
       if (!format) {
         throw InvalidRequestError(
@@ -1303,6 +1319,8 @@ router.post(
         includeOAuthState: false,
       });
       const result = await loadPublicShare({
+        user: ctx.state.auth?.user,
+        authenticationType: ctx.state.auth?.type,
         id: shareId,
         teamId: teamFromCtx?.id,
       });

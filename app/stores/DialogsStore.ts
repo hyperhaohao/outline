@@ -76,7 +76,8 @@ export default class DialogsStore {
           this.modalStack.clear();
         }
 
-        this.modalStack.set(id ?? replaceId ?? uuidv4(), {
+        const nextStack = new Map(this.modalStack);
+        nextStack.set(id ?? replaceId ?? uuidv4(), {
           title,
           content,
           style,
@@ -85,6 +86,7 @@ export default class DialogsStore {
           isOpen: true,
           onClose,
         });
+        this.modalStack = nextStack;
       }),
       0
     );
@@ -92,11 +94,13 @@ export default class DialogsStore {
 
   @action
   closeModal = (id: string) => {
-    this.modalStack.delete(id);
+    const nextStack = new Map(this.modalStack);
+    nextStack.delete(id);
+    this.modalStack = nextStack;
   };
 
   @action
   closeAllModals = () => {
-    this.modalStack.clear();
+    this.modalStack = new Map();
   };
 }

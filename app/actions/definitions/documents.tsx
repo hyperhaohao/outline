@@ -1,4 +1,5 @@
 import copy from "copy-to-clipboard";
+import { ExportApprovalRequest } from "~/components/Export/ExportApprovalRequest";
 import { canPrintDocument } from "~/utils/printSecurity";
 import type { TFunction } from "i18next";
 import invariant from "invariant";
@@ -1162,6 +1163,36 @@ export const searchInDocument = createInternalLinkAction({
   },
 });
 
+export const requestDocumentExport = createAction({
+  name: () => "申请导出…",
+  section: ActiveDocumentSection,
+  icon: <ExportIcon />,
+  visible: ({ activeDocumentId, stores }) =>
+    !!activeDocumentId &&
+    !!stores.policies.abilities(activeDocumentId).requestExport,
+  perform: async ({
+    activeDocumentId: currentDocumentId,
+    getActiveModel,
+    stores,
+  }) => {
+    const activeDocumentId = getActiveModel(Document)?.id ?? currentDocumentId;
+    if (activeDocumentId) {
+      await new Promise<void>((resolve) =>
+        window.requestAnimationFrame(() => resolve())
+      );
+      stores.dialogs.openModal({
+        title: "申请导出资料",
+        content: (
+          <ExportApprovalRequest
+            resourceId={activeDocumentId}
+            resourceType="document"
+          />
+        ),
+      });
+    }
+  },
+});
+
 export const printDocument = createAction({
   name: ({ t, isMenu }) => (isMenu ? t("Print") : t("Print document")),
   analyticsName: "Print document",
@@ -1172,8 +1203,35 @@ export const printDocument = createAction({
   visible: ({ activeDocumentId, stores }) =>
     !!activeDocumentId &&
     typeof window.print === "function" &&
-    !!stores.policies.abilities(activeDocumentId).download,
-  perform: ({ activeDocumentId, stores }) => {
+    !!(
+      stores.policies.abilities(activeDocumentId).download ||
+      stores.policies.abilities(activeDocumentId).requestExport
+    ),
+  perform: async ({
+    activeDocumentId: currentDocumentId,
+    getActiveModel,
+    stores,
+  }) => {
+    const activeDocumentId = getActiveModel(Document)?.id ?? currentDocumentId;
+    if (
+      activeDocumentId &&
+      stores.policies.abilities(activeDocumentId).requestExport
+    ) {
+      await new Promise<void>((resolve) =>
+        window.requestAnimationFrame(() => resolve())
+      );
+      stores.dialogs.openModal({
+        title: "申请打印预览",
+        content: (
+          <ExportApprovalRequest
+            resourceId={activeDocumentId}
+            resourceType="document"
+            action="print"
+          />
+        ),
+      });
+      return;
+    }
     if (!canPrintDocument(stores, activeDocumentId)) {
       return;
     }
@@ -1193,8 +1251,12 @@ export const exportDocument = createActionWithChildren({
   keywords: "download print pdf markdown html",
   visible: ({ activeDocumentId, stores }) =>
     !!activeDocumentId &&
-    !!stores.policies.abilities(activeDocumentId).download,
+    !!(
+      stores.policies.abilities(activeDocumentId).download ||
+      stores.policies.abilities(activeDocumentId).requestExport
+    ),
   children: [
+    requestDocumentExport,
     downloadDocumentAsMarkdown,
     downloadDocumentAsHTML,
     downloadDocumentAsTextBundle,
@@ -1961,6 +2023,7 @@ export const rootDocumentActions = [
   downloadDocumentAsHTML,
   downloadDocumentAsTextBundle,
   downloadDocumentAsPDF,
+  requestDocumentExport,
   copyDocumentLink,
   copyDocumentShareLink,
   copyDocumentAsMarkdown,

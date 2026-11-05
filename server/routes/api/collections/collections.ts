@@ -1,4 +1,5 @@
 import Router from "@koa/router";
+import { NotFoundError } from "@server/errors";
 import { auditPersonalCollection } from "@server/security/personalAccess";
 import { authorizeExport } from "@server/security/exportAuthorization";
 import { identityFromContext, recordAudit } from "@server/security/audit";
@@ -541,7 +542,7 @@ router.post(
 router.post(
   "collections.export",
   rateLimiter(RateLimiterStrategy.FiftyPerHour),
-  auth({ role: UserRole.Member }),
+  auth(),
   validate(T.CollectionsExportSchema),
   transaction(),
   async (ctx: APIContext<T.CollectionsExportReq>) => {
@@ -554,7 +555,12 @@ router.post(
       userId: user.id,
       transaction,
     });
-    authorizeExport(user, collection);
+    if (!collection) {
+      throw NotFoundError();
+    }
+    if (user.isAdmin) {
+      authorizeExport(user, collection);
+    }
     await recordAudit(
       identityFromContext(ctx)!,
       { operation: "collections.export", result: "allowed", targetIds: [id] },

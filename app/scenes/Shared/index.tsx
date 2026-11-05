@@ -1,5 +1,5 @@
 import { observer } from "mobx-react";
-import { Suspense, useCallback, useEffect } from "react";
+import { Suspense, useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useLocation, useParams } from "react-router-dom";
 import styled, { ThemeProvider } from "styled-components";
@@ -131,6 +131,7 @@ function SharedScene() {
 
   const model = useModel();
   const share = shares.get(shareId);
+  const [revoked, setRevoked] = useState(false);
   const activePage = useActivePage(share);
 
   const team = share?.team;
@@ -200,6 +201,27 @@ function SharedScene() {
   useEffect(() => {
     void request();
   }, [request]);
+
+  // 分享只授予当前请求读取权，链接关闭或身份失效后不继续展示缓存页面。
+  useEffect(() => {
+    let active = true;
+    setRevoked(false);
+    const timer = window.setInterval(() => {
+      void client.post("/shares.info", { id: shareId }).catch(() => {
+        if (active) {
+          setRevoked(true);
+        }
+      });
+    }, 15000);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+    };
+  }, [shareId]);
+
+  if (revoked) {
+    return <Error404 />;
+  }
 
   if (loading && !loaded) {
     return <Loading location={location} />;

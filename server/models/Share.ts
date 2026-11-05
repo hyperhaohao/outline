@@ -110,6 +110,16 @@ class Share extends IdModel<
   InferAttributes<Share>,
   Partial<InferCreationAttributes<Share>>
 > {
+  /** 内部分享不使用匿名发布标记，旧版加载器必须保持拒绝。 */
+  @Default("public")
+  @Column(DataType.STRING)
+  audience: "public" | "workspace";
+
+  /** 内部链接开关独立于历史published字段。 */
+  @Default(false)
+  @Column(DataType.BOOLEAN)
+  internalEnabled: boolean;
+
   @Column(DataType.BOOLEAN)
   published: boolean;
 

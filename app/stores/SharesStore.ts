@@ -35,7 +35,7 @@ export default class SharesStore extends Store<Share> {
 
   @computed
   get published(): Share[] {
-    return this.orderedData.filter((share) => share.published);
+    return this.orderedData.filter((share) => share.enabled);
   }
 
   @action
@@ -131,7 +131,7 @@ export default class SharesStore extends Store<Share> {
       ? this.getByCollectionId(document.collectionId)
       : undefined;
 
-    if (collectionShare?.published) {
+    if (collectionShare?.enabled) {
       return collectionShare;
     }
 
@@ -150,7 +150,7 @@ export default class SharesStore extends Store<Share> {
     for (const parentId of parentIds) {
       const share = this.getByDocumentId(parentId);
 
-      if (share?.includeChildDocuments && share.published) {
+      if (share?.includeChildDocuments && share.enabled) {
         return share;
       }
     }
